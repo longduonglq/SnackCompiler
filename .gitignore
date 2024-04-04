@@ -147,3 +147,9 @@ tramp
 Session.vim
 .netrwhist
 *~
+
+## test files
+outasm.s
+refoutasm.s
+stdout.txt
+refstdout.txt

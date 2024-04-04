@@ -15,7 +15,8 @@ public class AssignStmt extends Stmt {
      *  [LEFT..RIGHT].
      */
     public AssignStmt(Location left, Location right,
-                      List<Expr> targets, Expr value) {
+                      List<Expr> targets, Expr value)
+    {
         super(left, right);
         this.targets = targets;
         this.value = value;

@@ -1,11 +1,12 @@
 package chocopy.pa3;
 
 import java.util.List;
+import java.util.Stack;
 
 import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
-import chocopy.common.astnodes.Stmt;
-import chocopy.common.astnodes.ReturnStmt;
+import chocopy.common.analysis.types.Type;
+import chocopy.common.astnodes.*;
 import chocopy.common.codegen.CodeGenBase;
 import chocopy.common.codegen.FuncInfo;
 import chocopy.common.codegen.Label;
@@ -81,16 +82,64 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitGlobalLabel(funcInfo.getCodeLabel());
         StmtAnalyzer stmtAnalyzer = new StmtAnalyzer(funcInfo);
 
-        for (Stmt stmt : funcInfo.getStatements()) {
+        for (Stmt stmt : funcInfo.getStatements())
+        {
             stmt.dispatch(stmtAnalyzer);
         }
 
-        backend.emitMV(A0, ZERO, "Returning None implicitly");
+        // if no explicit final return statement, return None implicitly
+        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
+        {
+            backend.emitMV(A0, ZERO, "Returning None implicitly");
+        }
         backend.emitLocalLabel(stmtAnalyzer.epilogue, "Epilogue");
 
         // FIXME: {... reset fp etc. ...}
-        backend.emitJR(RA, "Return to caller");
     }
+
+    static private class TransientsCount extends AbstractNodeAnalyzer< Integer >
+    {
+        @Override
+        public Integer analyze(BinaryExpr be)
+        {
+            Integer l = be.left.dispatch(this);
+            Integer r = be.right.dispatch(this);
+            return Math.max(l, 1 + r);
+        }
+
+        @Override
+        public Integer analyze(IfExpr ie)
+        {
+            Integer condExpr = ie.condition.dispatch(this);
+            Integer thenExpr = ie.thenExpr.dispatch(this);
+            Integer elseExpr = ie.elseExpr.dispatch(this);
+            return Math.max(condExpr, Math.max(thenExpr, elseExpr));
+        }
+
+        @Override
+        public Integer analyze(CallExpr ce)
+        {
+            int accMax = 0;
+            for (int i = 1; i <= ce.args.size(); i++)
+                accMax = Math.max(accMax, ce.dispatch(this) + ce.args.size() - i);
+            return accMax;
+        }
+        @Override
+        public Integer analyze(MethodCallExpr mce)
+        {
+            int accMax = 0;
+            for (int i = 1; i <= mce.args.size(); i++)
+                accMax = Math.max(accMax, mce.dispatch(this) + mce.args.size() - i);
+            return accMax;
+        }
+
+        // @Override public Integer defaultAction(Node node) { return 0; }
+        @Override public Integer analyze(BooleanLiteral lit) { return 0; }
+        @Override public Integer analyze(StringLiteral lit) { return 0; }
+        @Override public Integer analyze(IntegerLiteral lit) { return 0; }
+        @Override public Integer analyze(NoneLiteral lit) { return 0; }
+    }
+
 
     /** An analyzer that encapsulates code generation for statments. */
     private class StmtAnalyzer extends AbstractNodeAnalyzer<Void> {
@@ -135,6 +184,10 @@ public class CodeGenImpl extends CodeGenBase {
          *  level. */
         private FuncInfo funcInfo;
 
+        // TODO: some indication of where temporaries should continue
+        // this represents offsets from `fp`.
+        protected Stack<Integer> tempsOffsetStack = new Stack<>();
+
         /** An analyzer for the function described by FUNCINFO0, which is null
          *  for the top level. */
         StmtAnalyzer(FuncInfo funcInfo0) {
@@ -145,21 +198,70 @@ public class CodeGenImpl extends CodeGenBase {
                 sym = funcInfo.getSymbolTable();
             }
             epilogue = generateLocalLabel();
+            tempsOffsetStack.push(0);
         }
 
-        // FIXME: Example of statement.
         @Override
         public Void analyze(ReturnStmt stmt) {
-            // FIXME: Here, we emit an instruction that does nothing. Clearly,
-            // this is wrong, and you'll have to fix it.
-            // This is here just to demonstrate how to emit a
-            // RISC-V instruction.
-            backend.emitMV(ZERO, ZERO, "No-op");
+            // TODO: this assumes that an @f.size constant had been defined. It hasn't been (yet).
+            // computes return value
+            stmt.value.dispatch(this);
+            backend.emitLW(RA, FP, -4, "Get return address");
+            backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+            backend.emitADDI(SP, SP, String.format("@%s.size", funcInfo.getBaseName()), "Restore stack pointer");
+            backend.emitJR(RA, "Return to caller");
             return null;
         }
 
-        // FIXME: More, of course.
+        @Override
+        public Void analyze(AssignStmt as)
+        {
+            as.value.dispatch(this);
+            return null;
+        }
 
+        protected Integer _pushTempToStack(RiscVBackend.Register reg, String cmt)
+        {
+            backend.emitSW(reg, FP, -tempsOffsetStack.peek(),
+                    cmt != null ? cmt : String.format("Store temporary in %s to stack", reg.toString()));
+            tempsOffsetStack.push(tempsOffsetStack.peek() + 4);
+            return tempsOffsetStack.peek();
+        }
+        protected Integer _popTempOffStack(RiscVBackend.Register reg, String cmt)
+        {
+            tempsOffsetStack.pop();
+            backend.emitLW(reg, FP, -tempsOffsetStack.peek(),
+                    cmt != null ? cmt : String.format("Pop temporary from stack to reg %s", reg.toString()));
+            return tempsOffsetStack.peek();
+        }
+
+        @Override
+        public Void analyze(BinaryExpr be)
+        {
+            be.left.dispatch(this);
+            _pushTempToStack(A0, "Store binop's left operand to stack");
+            be.right.dispatch(this);
+            _popTempOffStack(T1, "Binop's left operand from stack to `T1`.");
+            switch (be.operator)
+            {
+                case "+":
+                    backend.emitADD(A0, T1, A0, "+ two operands");
+                    break;
+                case "-":
+                    backend.emitSUB(A0, T1, A0, "- two operands");
+                    break;
+                case "*":
+                    backend.emitMUL(A0, T1, A0, "* two operands");
+                    break;
+                case "//":
+                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    break;
+                case "%":
+                    backend.emitREM(A0, T1, A0, "% two operands");
+                    break;
+            }
+            return null;
+        }
     }
 
     /**

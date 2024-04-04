@@ -1,0 +1,8 @@
+Reading src/test/data/pa3/sample/call.py.ast.typed
+start f
+start g
+start h
+end h
+end g
+end f
+42
