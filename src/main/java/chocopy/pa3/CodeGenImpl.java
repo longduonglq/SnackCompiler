@@ -7,11 +7,7 @@ import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
 import chocopy.common.analysis.types.Type;
 import chocopy.common.astnodes.*;
-import chocopy.common.codegen.CodeGenBase;
-import chocopy.common.codegen.FuncInfo;
-import chocopy.common.codegen.Label;
-import chocopy.common.codegen.RiscVBackend;
-import chocopy.common.codegen.SymbolInfo;
+import chocopy.common.codegen.*;
 
 import static chocopy.common.codegen.RiscVBackend.Register.*;
 
@@ -262,6 +258,62 @@ public class CodeGenImpl extends CodeGenBase {
             }
             return null;
         }
+
+        @Override
+        public Void analyze(BooleanLiteral bl) {
+            //Store boolean in A0 reg?
+            //Booleans - True: 1 and False: 0
+            backend.emitLI(A0, bl.value ? 1 : 0, "Load boolean immediate val into A0");
+            return null;
+        }
+
+        @Override
+        public Void analyze(StringLiteral sl) {
+            Label stringLabel = constants.getStrConstant(sl.value);
+            backend.emitLA(A0, stringLabel, "Load string label to A0");
+            return null;
+        }
+
+        @Override
+        public Void analyze(ExprStmt es) {
+            es.expr.dispatch(this);
+            return null;
+        }
+
+        @Override
+        public Void analyze(CallExpr ce) {
+            String functionName = ce.function.name;
+            FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
+            List<String> functionParams = functionInfo.getParams();
+
+            //TODO: Add the appropriate functionality for nested function calls
+
+            for (int i = ce.args.size() - 1; i >= 0; i--) {
+                Expr argExpr = ce.args.get(i);
+                String paramName = functionParams.get(i);
+                StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
+
+                //Should output result into A0 reg
+                argExpr.dispatch(this);
+
+                //Handle "wrapping" integers and booleans
+                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.INT_TYPE)) {
+                    //Call Int Wrapping Code Emitter
+                    backend.emitInsn("jal wrapInteger", null);
+                }
+
+                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
+                    //Call Bool Wrapping Code Emitter: Create Bool object
+                    backend.emitInsn("jal wrapBoolean", null);
+                }
+
+                backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
+                backend.emitSW(A0, SP, 0, "Store AO to newly allocated arg space");
+            }
+
+            backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
+            return null;
+        }
     }
 
     /**
@@ -291,6 +343,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitErrorFunc(errorNone, "Operation on None");
         emitErrorFunc(errorDiv, "Division by zero");
         emitErrorFunc(errorOob, "Index out of bounds");
+        emitWrappedBoolean();
     }
 
     /** Emit an error routine labeled ERRLABEL that aborts with message MSG. */
@@ -302,5 +355,29 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitADDI(A1, A1, getAttrOffset(strClass, "__str__"),
                          "Load address of attribute __str__");
         backend.emitJ(abortLabel, "Abort");
+    }
+
+    private void emitWrappedBoolean() {
+        Label emitWrappedBooleanLabel = new Label("wrapBoolean");
+        Label localTrueBranchLabel = generateLocalLabel();
+
+        backend.emitGlobalLabel(emitWrappedBooleanLabel);
+        backend.emitLI(T0, 1, "Load True into temp reg for comparison");
+        backend.emitBEQ(A0, T0, localTrueBranchLabel, "Check which boolean branch to go to");
+        //False
+        backend.emitLA(A0, constants.getBoolConstant(false), "Load False constant's address into A0");
+        backend.emitJR(RA, "Go back");
+        //True
+        backend.emitLocalLabel(localTrueBranchLabel, "Label for true branch");
+        backend.emitLA(A0, constants.getBoolConstant(true), "Load True constant's address into A0");
+        backend.emitJR(RA, "Go back");
+    }
+
+    private void emitWrappedInt(int value) {
+        Label emitWrappedIntLabel = new Label("wrapInteger");
+
+        backend.emitGlobalLabel(emitWrappedIntLabel);
+        backend.emitLA(A0, constants.getIntConstant(value), "Load Int constant's address into A0");
+        backend.emitJR(RA, "Go back");
     }
 }
