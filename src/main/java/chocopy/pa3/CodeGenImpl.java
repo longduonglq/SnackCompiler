@@ -260,6 +260,12 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
+        public Void analyze(IntegerLiteral il) {
+            backend.emitLI(A0, il.value, "Load int val into A0");
+            return null;
+        }
+
+        @Override
         public Void analyze(BooleanLiteral bl) {
             //Store boolean in A0 reg?
             //Booleans - True: 1 and False: 0
@@ -314,6 +320,30 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
             return null;
         }
+
+        @Override
+        public Void analyze(IfStmt ifStmt) {
+            Label falseElseBranch = generateLocalLabel();
+            Label finishIfStmtBranch = generateLocalLabel();
+
+            ifStmt.condition.dispatch(this);
+            backend.emitBEQZ(A0, falseElseBranch, "If A0 == 0, jump to falseElseBranch");
+
+            //TRUE Branch
+            for (Stmt thenStmt: ifStmt.thenBody) {
+                thenStmt.dispatch(this);
+            }
+            backend.emitJAL(finishIfStmtBranch, null);
+
+            //FALSE Branch
+            backend.emitLocalLabel(falseElseBranch, null);
+            for (Stmt elseStmt: ifStmt.elseBody) {
+                elseStmt.dispatch(this);
+            }
+
+            backend.emitLocalLabel(finishIfStmtBranch, null);
+            return null;
+        }
     }
 
     /**
@@ -343,6 +373,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitErrorFunc(errorNone, "Operation on None");
         emitErrorFunc(errorDiv, "Division by zero");
         emitErrorFunc(errorOob, "Index out of bounds");
+        emitWrappedInt();
         emitWrappedBoolean();
     }
 
@@ -373,11 +404,21 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitJR(RA, "Go back");
     }
 
-    private void emitWrappedInt(int value) {
+    private void emitWrappedInt() {
         Label emitWrappedIntLabel = new Label("wrapInteger");
+        ClassInfo intClassInfo = (ClassInfo) globalSymbols.get("int");
+        Label intClassPrototypeLabel = intClassInfo.getPrototypeLabel();
 
         backend.emitGlobalLabel(emitWrappedIntLabel);
-        backend.emitLA(A0, constants.getIntConstant(value), "Load Int constant's address into A0");
-        backend.emitJR(RA, "Go back");
+        backend.emitADDI(SP, SP, -8, null);
+        backend.emitSW(RA, SP, 0, null);
+        backend.emitSW(A0, SP, 4, null);
+        backend.emitLA(A0, intClassPrototypeLabel, null);
+        backend.emitInsn("jal alloc", null);
+        backend.emitLW(T0, SP, 4, null);
+        backend.emitSW(T0, A0, getAttrOffset(intClass, "__int__"), null);
+        backend.emitLW(RA, SP, 0, null);
+        backend.emitADDI(SP, SP, 8, null);
+        backend.emitJR(RA, null);
     }
 }
