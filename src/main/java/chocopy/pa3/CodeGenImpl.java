@@ -377,12 +377,38 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
+        @Override
+        public Void analyze(BinaryExpr be)
+        {
+            be.left.dispatch(this);
+            _pushRegToStack(A0, "Store binop's left operand to stack");
+            be.right.dispatch(this);
+            _popRegOffStack(T1, "Binop's left operand from stack to `T1`.");
+            switch (be.operator)
+            {
+                case "+":
+                    backend.emitADD(A0, T1, A0, "+ two operands");
+                    break;
+                case "-":
+                    backend.emitSUB(A0, T1, A0, "- two operands");
+                    break;
+                case "*":
+                    backend.emitMUL(A0, T1, A0, "* two operands");
+                    break;
+                case "//":
+                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    break;
+                case "%":
+                    backend.emitREM(A0, T1, A0, "% two operands");
+                    break;
+            }
+            return null;
+        }
 
         @Override
         public Void analyze(IntegerLiteral intLit)
         {
             backend.emitLI(A0, intLit.value, format("Load integer literal: %d", intLit.value));
-            // backend.emitJAL(intClass.get);
             return null;
         }
 
@@ -468,12 +494,12 @@ public class CodeGenImpl extends CodeGenBase {
                 //Handle "wrapping" integers and booleans
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.INT_TYPE)) {
                     // Call Int Wrapping Code Emitter
-                    backend.emitInsn("jal wrapInteger", null);
+                    wrapInteger();
                 }
 
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
                     // Call Bool Wrapping Code Emitter: Create Bool object
-                    backend.emitInsn("jal wrapBoolean", null);
+                    wrapBoolean();
                 }
 
                 // backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
@@ -508,6 +534,86 @@ public class CodeGenImpl extends CodeGenBase {
 
             backend.emitLocalLabel(finishIfStmtBranch, null);
             return null;
+        }
+
+        @Override
+        public Void analyze(Identifier id) {
+            String idName = id.name;
+            SymbolInfo idSymbolInfo = sym.get(idName);
+
+            //TODO: Support StackVarInfos
+
+            if (idSymbolInfo instanceof GlobalVarInfo) {
+                backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
+            }
+
+            return null;
+        }
+
+        @Override
+        public Void analyze(AssignStmt as) {
+            as.value.dispatch(this);
+
+            for (Expr targetExpr: as.targets) {
+                String targetExprName = ((Identifier) targetExpr).name;
+                SymbolInfo targetExprSymbolInfo = sym.get(targetExprName);
+
+                //box if value is of type int or bool and target type is object
+                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                        as.value.getInferredType().equals(Type.INT_TYPE)) {
+                        wrapInteger();
+                }
+
+                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                        as.value.getInferredType().equals(Type.BOOL_TYPE)) {
+                    wrapBoolean();
+                }
+
+                GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
+                if (globalTypedVarSymbolInfo != null) {
+                    backend.emitSW(A0, globalTypedVarSymbolInfo.getLabel(), T1, "Store A0 into global var " + globalTypedVarSymbolInfo.getVarName());
+                } else {
+                    emitCodeForLocalVarAssignmentInFunc(targetExprSymbolInfo);
+                }
+            }
+
+            return null;
+        }
+
+        /* PRIVATE HELPER METHODS */
+        private void wrapInteger() {
+            backend.emitInsn("jal wrapInteger", null);
+        }
+
+        private void wrapBoolean() {
+            backend.emitInsn("jal wrapBoolean", null);
+        }
+
+        private int getIndexOfStackVarInfo(List<StackVarInfo> list, StackVarInfo svi) {
+            for (int i = 0; i < list.size(); i++) {
+                if (svi.equals(list.get(i))) {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        private void emitCodeForLocalVarAssignmentInFunc(SymbolInfo varDefSymbolInfo) {
+            //NOTE: UNTESTED
+            StackVarInfo stackVarDefInfo = (StackVarInfo) varDefSymbolInfo;
+            FuncInfo currFuncInfo = stackVarDefInfo.getFuncInfo();
+
+            while (currFuncInfo != null) {
+                List<StackVarInfo> funcInfoLocals = currFuncInfo.getLocals();
+
+                if (funcInfoLocals.contains(stackVarDefInfo)) {
+                    //Find the index of the stackVarDefInfo in question in funcStackVarInfos
+                    int index = getIndexOfStackVarInfo(funcInfoLocals, stackVarDefInfo);
+                    int offset = 8 + (funcInfoLocals.size() - 1 - index) * backend.getWordSize(); //* from the caller's control link & return link
+                    backend.emitSW(A0, FP, -offset, "SW AO into local variable " + stackVarDefInfo.getVarName());
+                }
+                currFuncInfo = currFuncInfo.getParentFuncInfo();
+            }
         }
     }
 
