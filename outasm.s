@@ -92,13 +92,12 @@ main:
   sw zero, 0(sp)                           # Top saved FP is 0.
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
-  addi sp, fp, -16                         # sp points to top-of-stack
-  addi sp, fp, -16                         # sp points to top-of-stack
-  jal $f                                   # Jump to function f
+  jal $f                                   # Call function: f
   addi sp, fp, -16                         # Set SP to top of stack
+  jal wrapInteger
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
   li a0, 10                                # Code for ecall: exit
   ecall
@@ -237,20 +236,17 @@ $f:
   sw ra, 12(sp)                            # [fn=f] Save return address.
   sw fp, 8(sp)                             # [fn=f] Save control link.
   addi fp, sp, 16                          # [fn=f] `fp` is at old `sp`.
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_5                           # Load string literal: "start f"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
-  addi sp, fp, -16                         # sp points to top-of-stack
-  jal $g                                   # Jump to function g
+  jal $g                                   # Call function: g
   addi sp, fp, -16                         # Set SP to top of stack
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_6                           # Load string literal: "end f"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
   li a0, 42                                # Load integer literal: 42
   lw ra, -4(fp)                            # Get return address
@@ -271,20 +267,17 @@ $g:
   sw ra, 12(sp)                            # [fn=g] Save return address.
   sw fp, 8(sp)                             # [fn=g] Save control link.
   addi fp, sp, 16                          # [fn=g] `fp` is at old `sp`.
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_7                           # Load string literal: "start g"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
-  addi sp, fp, -16                         # sp points to top-of-stack
-  jal $h                                   # Jump to function h
+  jal $h                                   # Call function: h
   addi sp, fp, -16                         # Set SP to top of stack
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_8                           # Load string literal: "end g"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
   mv a0, zero                              # [fn=g] Returning None implicitly
   j label_2                                # [fn=g] jump to epilogue
@@ -301,17 +294,15 @@ $h:
   sw ra, 12(sp)                            # [fn=h] Save return address.
   sw fp, 8(sp)                             # [fn=h] Save control link.
   addi fp, sp, 16                          # [fn=h] `fp` is at old `sp`.
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_9                           # Load string literal: "start h"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
-  addi sp, fp, -16                         # sp points to top-of-stack
   la a0, const_10                          # Load string literal: "end h"
   addi sp, sp, 4                           # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Jump to function print
+  jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
   mv a0, zero                              # [fn=h] Returning None implicitly
   j label_3                                # [fn=h] jump to epilogue
@@ -401,6 +392,29 @@ error.OOB:
   la a1, const_14                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
+
+.globl wrapInteger
+wrapInteger:
+  addi sp, sp, -8
+  sw ra, 0(sp)
+  sw a0, 4(sp)
+  la a0, $int$prototype
+  jal alloc
+  lw t0, 4(sp)
+  sw t0, 12(a0)
+  lw ra, 0(sp)
+  addi sp, sp, 8
+  jr ra
+
+.globl wrapBoolean
+wrapBoolean:
+  li t0, 1                                 # Load True into temp reg for comparison
+  beq a0, t0, label_4                      # Check which boolean branch to go to
+  la a0, const_0                           # Load False constant's address into A0
+  jr ra                                    # Go back
+label_4:                                   # Label for true branch
+  la a0, const_1                           # Load True constant's address into A0
+  jr ra                                    # Go back
 
 .data
 

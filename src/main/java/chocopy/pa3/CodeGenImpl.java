@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
+import chocopy.common.analysis.types.ClassValueType;
 import chocopy.common.analysis.types.Type;
 import chocopy.common.astnodes.*;
 import chocopy.common.codegen.*;
@@ -42,7 +43,6 @@ public class CodeGenImpl extends CodeGenBase {
     private final Label errorOob = new Label("error.OOB");
 
     private final boolean _EMIT_RT_TRACE = true;
-
 
     protected final RiscVBackend bke;
     /**
@@ -292,12 +292,6 @@ public class CodeGenImpl extends CodeGenBase {
             return es.expr.dispatch(this);
         }
 
-        // @Override public Integer defaultAction(Node node) { return 0; }
-        @Override public Integer analyze(BooleanLiteral lit) { return 0; }
-        @Override public Integer analyze(StringLiteral lit) { return 0; }
-        @Override public Integer analyze(IntegerLiteral lit) { return 0; }
-        @Override public Integer analyze(NoneLiteral lit) { return 0; }
-
         @Override
         public Integer defaultAction(Node n) {
             return Integer.MAX_VALUE;
@@ -383,41 +377,12 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-        @Override
-        public Void analyze(ExprStmt es) {
-            es.expr.dispatch(this);
-            return null;
-        }
-
-        @Override
-        public Void analyze(CallExpr ce)
-        {
-            // _rtPrint("At CallExpr: %s\n", ce.function.name);
-            // backend.emitInsn("ebreak", "");
-            // TODO: static link needs to be dealt with around here (probably)
-            // backend.emitADDI(SP, FP, format("-%s", _fnSizeLabel(funcInfo)), "");
-            FuncInfo calleeFnInfo = (FuncInfo) sym.get(ce.function.name);
-            int fnArSz = _getFnArSize(calleeFnInfo);
-            backend.emitADDI(SP, FP, -fnArSz, "sp points to top-of-stack");
-            for (int i = ce.args.size() - 1; 0 <= i; i--)
-            {
-                Expr iarg = ce.args.get(i);
-                iarg.dispatch(this);
-                _pushRegToStack(A0, format("push arg %d-th of \"%s\" to stack", i, ce.function.name));
-                // box the argument.
-            }
-
-            FuncInfo finfo = (FuncInfo) sym.get(ce.function.name);
-            backend.emitJAL(finfo.getCodeLabel(), format("Jump to function %s", finfo.getBaseName()));
-            backend.emitADDI(SP, FP, -fnArSz, "Set SP to top of stack");
-            return null;
-        }
 
         @Override
         public Void analyze(IntegerLiteral intLit)
         {
             backend.emitLI(A0, intLit.value, format("Load integer literal: %d", intLit.value));
-            backend.emitJAL(intClass.get);
+            // backend.emitJAL(intClass.get);
             return null;
         }
 
@@ -435,18 +400,13 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitSW(reg, SP, 0, format("push reg %s to stack", reg.toString()));
             return null;
         }
+
         protected Integer _popRegOffStack(RiscVBackend.Register reg, String cmt)
         {
             if (regStack.isEmpty())
                 throw new RuntimeException("Unbalanced calls to _pushRegToStack and _popRegOffStack");
             backend.emitLW(reg, SP, 0, format("pop stack to reg %s", reg.toString()));
             backend.emitADDI(SP, SP, -4, cmt);
-            return null;
-        }
-
-        @Override
-        public Void analyze(IntegerLiteral il) {
-            backend.emitLI(A0, il.value, "Load int val into A0");
             return null;
         }
 
@@ -459,25 +419,43 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(StringLiteral sl) {
-            Label stringLabel = constants.getStrConstant(sl.value);
-            backend.emitLA(A0, stringLabel, "Load string label to A0");
-            return null;
-        }
-
-        @Override
         public Void analyze(ExprStmt es) {
             es.expr.dispatch(this);
             return null;
         }
+
+
+        // @Override
+        // public Void analyze(CallExpr ce)
+        // {
+        //     // _rtPrint("At CallExpr: %s\n", ce.function.name);
+        //     // backend.emitInsn("ebreak", "");
+        //     // TODO: static link needs to be dealt with around here (probably)
+        //     // backend.emitADDI(SP, FP, format("-%s", _fnSizeLabel(funcInfo)), "");
+        //     FuncInfo calleeFnInfo = (FuncInfo) sym.get(ce.function.name);
+        //     int fnArSz = _getFnArSize(calleeFnInfo);
+        //     backend.emitADDI(SP, FP, -fnArSz, "sp points to top-of-stack");
+        //     for (int i = ce.args.size() - 1; 0 <= i; i--)
+        //     {
+        //         Expr iarg = ce.args.get(i);
+        //         iarg.dispatch(this);
+        //         _pushRegToStack(A0, format("push arg %d-th of \"%s\" to stack", i, ce.function.name));
+        //         // box the argument.
+        //     }
+
+        //     FuncInfo finfo = (FuncInfo) sym.get(ce.function.name);
+        //     backend.emitJAL(finfo.getCodeLabel(), format("Jump to function %s", finfo.getBaseName()));
+        //     return null;
+        // }
 
         @Override
         public Void analyze(CallExpr ce) {
             String functionName = ce.function.name;
             FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
             List<String> functionParams = functionInfo.getParams();
+            int fnArSz = _getFnArSize(functionInfo);
 
-            //TODO: Add the appropriate functionality for nested function calls
+            // TODO: Add the appropriate functionality for nested function calls
 
             for (int i = ce.args.size() - 1; i >= 0; i--) {
                 Expr argExpr = ce.args.get(i);
@@ -489,20 +467,22 @@ public class CodeGenImpl extends CodeGenBase {
 
                 //Handle "wrapping" integers and booleans
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.INT_TYPE)) {
-                    //Call Int Wrapping Code Emitter
+                    // Call Int Wrapping Code Emitter
                     backend.emitInsn("jal wrapInteger", null);
                 }
 
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
-                    //Call Bool Wrapping Code Emitter: Create Bool object
+                    // Call Bool Wrapping Code Emitter: Create Bool object
                     backend.emitInsn("jal wrapBoolean", null);
                 }
 
-                backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
-                backend.emitSW(A0, SP, 0, "Store AO to newly allocated arg space");
+                // backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
+                // backend.emitSW(A0, SP, 0, "Store AO to newly allocated arg space");
+                _pushRegToStack(A0, format("push arg %d-th of \"%s\" to stack", i, ce.function.name));
             }
 
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
+            backend.emitADDI(SP, FP, -fnArSz, "Set SP to top of stack");
             return null;
         }
 

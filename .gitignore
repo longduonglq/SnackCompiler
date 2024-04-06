@@ -158,3 +158,4 @@ ref_call_with_args.s
 refstdout.txt
 stdout.txt
 VarAssignRefoutasm.s
+_bootstrap.s

@@ -1,9 +1,3 @@
 Reading src/test/data/pa3/sample/call.py.ast.typed
-start f
-start g
-start h
-end h
-end g
-end f
-Invalid argument
-Exited with error code 1
++ Test: src/test/data/pa3/sample/call.py.ast.typed passed
+Tests: 1 passed, 0 failed, and 0 ignored.
