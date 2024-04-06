@@ -399,7 +399,7 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-        protected Integer _popRegOffStack(RiscVBackend.Register reg, String cmt)
+        protected Integer _popStackToReg(RiscVBackend.Register reg, String cmt)
         {
             if (regStack.isEmpty())
                 throw new RuntimeException("Unbalanced calls to _pushRegToStack and _popRegOffStack");
@@ -446,6 +446,46 @@ public class CodeGenImpl extends CodeGenBase {
         //     return null;
         // }
 
+        public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
+        {
+            int varIdx = funcInfo.getVarIndex(svi.getVarName());
+            backend.emitLW(reg, FP, -varIdx * backend.getWordSize(),
+                    format("[fn=%s] load local VAR `%s: %s` to reg `%s`",
+                            funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
+            return null;
+        }
+
+        public Void loadLocalParamToReg(VarInfo svi, RiscVBackend.Register reg)
+        {
+            int varIdx = funcInfo.getVarIndex(svi.getVarName());
+            backend.emitLW(reg, FP, +(funcInfo.getParams().size() - 1 - varIdx) * backend.getWordSize(),
+                    format("[fn=%s] load local PARAM `%s: %s` to reg `%s`",
+                            funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
+            return null;
+        }
+
+        @Override
+        public Void analyze(Identifier id)
+        {
+            if (funcInfo != null)
+            {
+                int index = funcInfo.getVarIndex(id.name);
+                VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
+                if (index < funcInfo.getParams().size())
+                {
+                    return loadLocalParamToReg(vi, A0);
+                }
+                else
+                {
+                    return loadLocalVarToReg(vi, A0);
+                }
+            }
+            else // global scope
+            {
+            }
+            return null;
+        }
+
         @Override
         public Void analyze(CallExpr ce) {
             String functionName = ce.function.name;
@@ -455,7 +495,9 @@ public class CodeGenImpl extends CodeGenBase {
 
             // TODO: Add the appropriate functionality for nested function calls
 
-            for (int i = 0; i < ce.args.size(); i++) {
+            // for (int i = ce.args.size() - 1; i >= 0; i--)
+            for (int i = 0; i < ce.args.size(); i++)
+            {
                 Expr argExpr = ce.args.get(i);
                 String paramName = functionParams.get(i);
                 StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
@@ -480,7 +522,7 @@ public class CodeGenImpl extends CodeGenBase {
 
                 // backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
                 // backend.emitSW(A0, SP, 0, "Store AO to newly allocated arg space");
-                _pushRegToStack(A0, format("push arg %d-th of \"%s\" to stack", i, ce.function.name));
+                _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
             }
 
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
@@ -518,7 +560,7 @@ public class CodeGenImpl extends CodeGenBase {
             be.left.dispatch(this);
             _pushRegToStack(A0, "Store binop's left operand to stack");
             be.right.dispatch(this);
-            _popRegOffStack(T1, "Binop's left operand from stack to `T1`.");
+            _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
             switch (be.operator)
             {
                 case "+":

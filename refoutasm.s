@@ -97,9 +97,7 @@ main:
   sw fp, @..main.size-8(sp)                # control link
   addi fp, sp, @..main.size                # New fp is at old SP.
   jal initchars                            # Initialize one-character strings.
-  li a0, 4                                 # Load integer literal 4
-  sw a0, -32(fp)                           # Push argument 0 from last.
-  addi sp, fp, -32                         # Set SP to last argument.
+  addi sp, fp, -16                         # Set SP to last argument.
   jal $f                                   # Invoke function: f
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
   jal makeint                              # Box integer
@@ -107,7 +105,7 @@ main:
   addi sp, fp, -16                         # Set SP to last argument.
   jal $print                               # Invoke function: print
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  .equiv @..main.size, 32
+  .equiv @..main.size, 16
 label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
   ecall
@@ -245,30 +243,9 @@ $f:
   sw ra, @f.size-4(sp)                     # return address
   sw fp, @f.size-8(sp)                     # control link
   addi fp, sp, @f.size                     # New fp is at old SP.
-  la a0, const_5                           # Load string literal
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@f.size                    # Set SP to stack frame top.
-  lw a0, 0(fp)                             # Load var: f.x
-  jal makeint                              # Box integer
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@f.size                    # Set SP to stack frame top.
   li a0, 1                                 # Load integer literal 1
-  sw a0, -12(fp)                           # Push argument 1 from last.
-  lw a0, 0(fp)                             # Load var: f.x
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $g                                   # Invoke function: g
-  addi sp, fp, -@f.size                    # Set SP to stack frame top.
-  la a0, const_6                           # Load string literal
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@f.size                    # Set SP to stack frame top.
-  lw a0, 0(fp)                             # Load var: f.x
+  sw a0, -12(fp)                           # local variable x
+  lw a0, -12(fp)                           # Load var: f.x
   j label_2                                # Go to return
   mv a0, zero                              # Load None
   j label_2                                # Jump to function epilogue
@@ -277,68 +254,6 @@ label_2:                                   # Epilogue
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
   addi sp, sp, @f.size                     # Restore stack pointer
-  jr ra                                    # Return to caller
-
-.globl $g
-$g:
-  addi sp, sp, -@g.size                    # Reserve space for stack frame.
-  sw ra, @g.size-4(sp)                     # return address
-  sw fp, @g.size-8(sp)                     # control link
-  addi fp, sp, @g.size                     # New fp is at old SP.
-  la a0, const_7                           # Load string literal
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@g.size                    # Set SP to stack frame top.
-  lw a0, 4(fp)                             # Load var: g.y
-  jal makeint                              # Box integer
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@g.size                    # Set SP to stack frame top.
-  lw a0, 0(fp)                             # Load var: g.z
-  jal makeint                              # Box integer
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@g.size                    # Set SP to stack frame top.
-  la a0, const_8                           # Load string literal
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $h                                   # Invoke function: h
-  addi sp, fp, -@g.size                    # Set SP to stack frame top.
-  la a0, const_9                           # Load string literal
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@g.size                    # Set SP to stack frame top.
-  mv a0, zero                              # Load None
-  j label_4                                # Jump to function epilogue
-label_4:                                   # Epilogue
-  .equiv @g.size, 16
-  lw ra, -4(fp)                            # Get return address
-  lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @g.size                     # Restore stack pointer
-  jr ra                                    # Return to caller
-
-.globl $h
-$h:
-  addi sp, sp, -@h.size                    # Reserve space for stack frame.
-  sw ra, @h.size-4(sp)                     # return address
-  sw fp, @h.size-8(sp)                     # control link
-  addi fp, sp, @h.size                     # New fp is at old SP.
-  lw a0, 0(fp)                             # Load var: h.msg
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@h.size                    # Set SP to stack frame top.
-  mv a0, zero                              # Load None
-  j label_6                                # Jump to function epilogue
-label_6:                                   # Epilogue
-  .equiv @h.size, 16
-  lw ra, -4(fp)                            # Get return address
-  lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @h.size                     # Restore stack pointer
   jr ra                                    # Return to caller
 
 .globl alloc
@@ -374,7 +289,7 @@ alloc2_16:                                 # Copy-loop header
   jr ra                                    # Return to caller
 alloc2_15:                                 # OOM handler
   li a0, @error_oom                        # Exit code for: Out of memory
-  la a1, const_10                          # Load error message as str
+  la a1, const_5                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -661,21 +576,21 @@ initchars:
 .globl error.None
 error.None:
   li a0, 4                                 # Exit code for: Operation on None
-  la a1, const_11                          # Load error message as str
+  la a1, const_6                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.Div
 error.Div:
   li a0, 2                                 # Exit code for: Division by zero
-  la a1, const_12                          # Load error message as str
+  la a1, const_7                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.OOB
 error.OOB:
   li a0, 3                                 # Exit code for: Index out of bounds
-  la a1, const_13                          # Load error message as str
+  la a1, const_8                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -697,17 +612,8 @@ const_1:
   .word 1                                  # Constant value of attribute: __bool__
   .align 2
 
-.globl const_9
-const_9:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 5                                  # Constant value of attribute: __len__
-  .string "end g"                          # Constant value of attribute: __str__
-  .align 2
-
-.globl const_12
-const_12:
+.globl const_7
+const_7:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -715,35 +621,8 @@ const_12:
   .string "Division by zero"               # Constant value of attribute: __str__
   .align 2
 
-.globl const_7
-const_7:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 7                                  # Constant value of attribute: __len__
-  .string "start g"                        # Constant value of attribute: __str__
-  .align 2
-
 .globl const_5
 const_5:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 7                                  # Constant value of attribute: __len__
-  .string "start f"                        # Constant value of attribute: __str__
-  .align 2
-
-.globl const_6
-const_6:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 5                                  # Constant value of attribute: __len__
-  .string "end f"                          # Constant value of attribute: __str__
-  .align 2
-
-.globl const_10
-const_10:
   .word 3                                  # Type tag for class: str
   .word 8                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -751,22 +630,13 @@ const_10:
   .string "Out of memory"                  # Constant value of attribute: __str__
   .align 2
 
-.globl const_13
-const_13:
+.globl const_8
+const_8:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
   .word 19                                 # Constant value of attribute: __len__
   .string "Index out of bounds"            # Constant value of attribute: __str__
-  .align 2
-
-.globl const_8
-const_8:
-  .word 3                                  # Type tag for class: str
-  .word 5                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 1                                  # Constant value of attribute: __len__
-  .string "h"                              # Constant value of attribute: __str__
   .align 2
 
 .globl const_3
@@ -778,8 +648,8 @@ const_3:
   .string "True"                           # Constant value of attribute: __str__
   .align 2
 
-.globl const_11
-const_11:
+.globl const_6
+const_6:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
