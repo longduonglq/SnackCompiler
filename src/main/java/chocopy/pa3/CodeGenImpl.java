@@ -218,6 +218,8 @@ public class CodeGenImpl extends CodeGenBase {
     {
         _emitSeparator(funcInfo.getFuncName(), null);
         backend.emitGlobalLabel(funcInfo.getCodeLabel());
+        // _rtPrint("In func %s\n", funcInfo.getFuncName());
+        // _rtPrintRegs(RA, FP, SP);
 
         // On fn entry, let's adjust `sp` and `fp` as the callee
         int arSize = _getFnArSize(funcInfo);
@@ -232,7 +234,7 @@ public class CodeGenImpl extends CodeGenBase {
         // let's first process locally-init variables
         for (StackVarInfo svi: funcInfo.getLocals())
         {
-            int idx = funcInfo.getVarIndex(svi.getVarName());
+            // int idx = funcInfo.getVarIndex(svi.getVarName());
             if (svi.getVarType().isSpecialType())
             {
                 svi.getInitialValue().dispatch(stmtAnalyzer);
@@ -250,13 +252,29 @@ public class CodeGenImpl extends CodeGenBase {
         {
             backend.emitMV(A0, ZERO, format("[fn=%s] Returning None implicitly", funcInfo.getFuncName()));
         }
+        else
+        {
+            ReturnStmt rs = (ReturnStmt)funcInfo
+                    .getStatements()
+                    .stream()
+                    .filter(stmt -> stmt instanceof ReturnStmt)
+                    .findAny()
+                    .get();
+            rs.value.dispatch(stmtAnalyzer);
+        }
 
         backend.emitJ(stmtAnalyzer.epilogue, format("[fn=%s] jump to epilogue", funcInfo.getFuncName()));
 
+        // computes return value
+        // stmt.value.dispatch(this);
+        // backend.emitLW(RA, FP, -4, "Get return address");
+        // backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+        // backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
+        // backend.emitJR(RA, "Return to caller");
         backend.emitLocalLabel(stmtAnalyzer.epilogue, "Epilogue");
         backend.emitLW(RA, FP, -4, "get return addr");
-        backend.emitLW(FP, FP, -8, "restore callee's fp");
-        backend.emitADDI(SP, SP, arSize, "restore stack ptr");
+        backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+        backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "restore stack ptr");
         backend.emitJR(RA, "return to caller");
     }
 
@@ -368,7 +386,8 @@ public class CodeGenImpl extends CodeGenBase {
          * An analyzer for the function described by FUNCINFO0, which is null
          * for the top level.
          */
-        StmtAnalyzer(FuncInfo funcInfo0) {
+        StmtAnalyzer(FuncInfo funcInfo0)
+        {
             funcInfo = funcInfo0;
             if (funcInfo == null) {
                 sym = globalSymbols;
@@ -379,14 +398,15 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(ReturnStmt stmt) {
+        public Void analyze(ReturnStmt stmt)
+        {
             // TODO: this assumes that an @f.size constant had been defined. It hasn't been (yet).
             // computes return value
-            stmt.value.dispatch(this);
-            backend.emitLW(RA, FP, -4, "Get return address");
-            backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
-            backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
-            backend.emitJR(RA, "Return to caller");
+            // stmt.value.dispatch(this);
+            // backend.emitLW(RA, FP, -4, "Get return address");
+            // backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+            // backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
+            // backend.emitJR(RA, "Return to caller");
             return null;
         }
 
@@ -477,8 +497,8 @@ public class CodeGenImpl extends CodeGenBase {
         public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
         {
             int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitLW(reg, FP, -varIdx * backend.getWordSize(),
-                    format("[fn=%s] load local VAR `%s: %s` to reg `%s`",
+            backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 8,
+                    format("[fn=%s] load local VAR `%s: %s` TO reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
         }
@@ -486,8 +506,8 @@ public class CodeGenImpl extends CodeGenBase {
         public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi)
         {
             int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitSW(reg, FP, -varIdx * backend.getWordSize(),
-                    format("[fn=%s] load local VAR `%s: %s` to reg `%s`",
+            backend.emitSW(reg, FP, -varIdx * backend.getWordSize() - 8,
+                    format("[fn=%s] store local VAR `%s: %s` FROM reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
         }
@@ -506,15 +526,46 @@ public class CodeGenImpl extends CodeGenBase {
         {
             if (funcInfo != null)
             {
-                int index = funcInfo.getVarIndex(id.name);
-                VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
-                if (index < funcInfo.getParams().size())
+                if (funcInfo.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
+                    || funcInfo.getParams().contains(id.name))
                 {
-                    return loadLocalParamToReg(vi, A0);
+                    int index = funcInfo.getVarIndex(id.name);
+                    VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
+                    if (index < funcInfo.getParams().size()) {
+                        return loadLocalParamToReg(vi, A0);
+                    } else {
+                        return loadLocalVarToReg(vi, A0);
+                    }
                 }
-                else
+                else // id must be nonlocal
                 {
-                    return loadLocalVarToReg(vi, A0);
+                    FuncInfo actualOuterScope = funcInfo;
+                    backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
+                    while (true)
+                    {
+                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)))
+                        {
+                            // t0 should now have the fp of the static-scope's AR
+                            StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
+                            int varIdx = actualOuterScope.getVarIndex(id.name);
+                            backend.emitLW(A0, T0,
+                                    +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize() - 8,
+                                    format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                                            actualOuterScope.getFuncName(),
+                                            svi.getVarName(),
+                                            svi.getVarType(),
+                                            "A0"));
+                            break;
+                        }
+                        else
+                        {
+                            backend.emitLW(T0, T0, 0,
+                                    format("Load static link from %s to %s",
+                                            actualOuterScope.getFuncName(),
+                                            actualOuterScope.getParentFuncInfo().getFuncName()));
+                            actualOuterScope = actualOuterScope.getParentFuncInfo();
+                        }
+                    }
                 }
             }
             else // global scope
@@ -524,7 +575,8 @@ public class CodeGenImpl extends CodeGenBase {
 
                 //TODO: Support StackVarInfos
 
-                if (idSymbolInfo instanceof GlobalVarInfo) {
+                if (idSymbolInfo instanceof GlobalVarInfo)
+                {
                     backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
                 }
             }
@@ -538,7 +590,22 @@ public class CodeGenImpl extends CodeGenBase {
             List<String> functionParams = functionInfo.getParams();
             int fnArSz = _getFnArSize(functionInfo);
 
-            // TODO: Add the appropriate functionality for nested function calls
+            // If the callee is statically nested, first push the `static link`
+            if (functionInfo.getParentFuncInfo() != null)
+            {
+                // Retrieve a static link to the static outer scope.
+                FuncInfo staticOuterScope = (FuncInfo) functionInfo.getParentFuncInfo();
+                FuncInfo actualOuterScope = (FuncInfo) funcInfo;
+                backend.emitMV(T0, FP, format("Get static link to %s", functionInfo.getFuncName()));
+                while (!actualOuterScope.equals(staticOuterScope))
+                {
+                    actualOuterScope = actualOuterScope.getParentFuncInfo();
+                    // deference static link
+                    backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
+                }
+                // now push static link as sort of "-1"-st argument.
+                _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
+            }
 
             // for (int i = ce.args.size() - 1; i >= 0; i--)
             for (int i = 0; i < ce.args.size(); i++)
@@ -630,6 +697,12 @@ public class CodeGenImpl extends CodeGenBase {
                 }
             }
 
+            return null;
+        }
+
+        @Override
+        public Void analyze(FuncDef fd)
+        {
             return null;
         }
 

@@ -80,6 +80,10 @@ $bool$dispatchTable:
 $str$dispatchTable:
   .word $object.__init__                   # Implementation for method: str.__init__
 
+.globl $g
+$g:
+  .word 1                                  # Initial value of global var: g
+
 .text
 
 .globl main
@@ -97,15 +101,17 @@ main:
   sw fp, @..main.size-8(sp)                # control link
   addi fp, sp, @..main.size                # New fp is at old SP.
   jal initchars                            # Initialize one-character strings.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $f                                   # Invoke function: f
+  lw a0, $g                                # Load global: g
+  sw a0, -32(fp)                           # Push argument 0 from last.
+  addi sp, fp, -32                         # Set SP to last argument.
+  jal $foo                                 # Invoke function: foo
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
   jal makeint                              # Box integer
   sw a0, -16(fp)                           # Push argument 0 from last.
   addi sp, fp, -16                         # Set SP to last argument.
   jal $print                               # Invoke function: print
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  .equiv @..main.size, 16
+  .equiv @..main.size, 32
 label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
   ecall
@@ -237,23 +243,69 @@ input_done:
   addi sp, sp, 16
   jr ra
 
-.globl $f
-$f:
-  addi sp, sp, -@f.size                    # Reserve space for stack frame.
-  sw ra, @f.size-4(sp)                     # return address
-  sw fp, @f.size-8(sp)                     # control link
-  addi fp, sp, @f.size                     # New fp is at old SP.
-  li a0, 1                                 # Load integer literal 1
-  sw a0, -12(fp)                           # local variable x
-  lw a0, -12(fp)                           # Load var: f.x
+.globl $foo.bar.baz
+$foo.bar.baz:
+  addi sp, sp, -@foo.bar.baz.size          # Reserve space for stack frame.
+  sw ra, @foo.bar.baz.size-4(sp)           # return address
+  sw fp, @foo.bar.baz.size-8(sp)           # control link
+  addi fp, sp, @foo.bar.baz.size           # New fp is at old SP.
+  lw t0, 0(fp)                             # Load static link from foo.bar.baz to foo.bar
+  lw t0, 0(t0)                             # Load static link from foo.bar to foo
+  lw a0, -12(t0)                           # Load var: foo.y
   j label_2                                # Go to return
   mv a0, zero                              # Load None
   j label_2                                # Jump to function epilogue
 label_2:                                   # Epilogue
-  .equiv @f.size, 16
+  .equiv @foo.bar.baz.size, 16
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @f.size                     # Restore stack pointer
+  addi sp, sp, @foo.bar.baz.size           # Restore stack pointer
+  jr ra                                    # Return to caller
+
+.globl $foo.bar
+$foo.bar:
+  addi sp, sp, -@foo.bar.size              # Reserve space for stack frame.
+  sw ra, @foo.bar.size-4(sp)               # return address
+  sw fp, @foo.bar.size-8(sp)               # control link
+  addi fp, sp, @foo.bar.size               # New fp is at old SP.
+  li a0, 3                                 # Load integer literal 3
+  sw a0, -12(fp)                           # local variable z
+  mv t0, fp                                # Get static link to foo.bar
+  sw t0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $foo.bar.baz                         # Invoke function: foo.bar.baz
+  addi sp, fp, -@foo.bar.size              # Set SP to stack frame top.
+  j label_4                                # Go to return
+  mv a0, zero                              # Load None
+  j label_4                                # Jump to function epilogue
+label_4:                                   # Epilogue
+  .equiv @foo.bar.size, 16
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, @foo.bar.size               # Restore stack pointer
+  jr ra                                    # Return to caller
+
+.globl $foo
+$foo:
+  addi sp, sp, -@foo.size                  # Reserve space for stack frame.
+  sw ra, @foo.size-4(sp)                   # return address
+  sw fp, @foo.size-8(sp)                   # control link
+  addi fp, sp, @foo.size                   # New fp is at old SP.
+  li a0, 2                                 # Load integer literal 2
+  sw a0, -12(fp)                           # local variable y
+  mv t0, fp                                # Get static link to foo
+  sw t0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $foo.bar                             # Invoke function: foo.bar
+  addi sp, fp, -@foo.size                  # Set SP to stack frame top.
+  j label_6                                # Go to return
+  mv a0, zero                              # Load None
+  j label_6                                # Jump to function epilogue
+label_6:                                   # Epilogue
+  .equiv @foo.size, 16
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, @foo.size                   # Restore stack pointer
   jr ra                                    # Return to caller
 
 .globl alloc

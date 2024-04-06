@@ -94,114 +94,9 @@ main:
   sw zero, 0(sp)                           # Top saved FP is 0.
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  seqz a0, a0
-  xor a0, t0, a0                           # == operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  seqz a0, a0
-  xor a0, t0, a0                           # == operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  seqz a0, a0
-  xor a0, t0, a0                           # == operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  seqz a0, a0
-  xor a0, t0, a0                           # == operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  snez a0, a0
-  xor a0, t0, a0                           # != operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  snez a0, a0
-  xor a0, t0, a0                           # != operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 1                                 # Load boolean immediate "true" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  snez a0, a0
-  xor a0, t0, a0                           # != operator
-  jal wrapBoolean
-  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  addi sp, sp, -4                          # Store binop's left operand to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  li a0, 0                                 # Load boolean immediate "false" into A0
-  lw t1, 0(sp)                             # pop stack to reg t1
-  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
-  snez t0, t0
-  snez a0, a0
-  xor a0, t0, a0                           # != operator
-  jal wrapBoolean
+  jal $f                                   # Call function: f
+  addi sp, fp, -20                         # Set SP to top of stack
+  jal wrapInteger
   addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
@@ -335,6 +230,23 @@ input_done:
   lw fp, -8(fp)
   addi sp, sp, 16
   jr ra
+  #--------------------------------------------------( f )-------------------------------------------------- # 
+
+.globl $f
+$f:
+  addi sp, sp, -20                         # [fn=f] Reserve space for stack frame
+  sw ra, 16(sp)                            # [fn=f] Save return address.
+  sw fp, 12(sp)                            # [fn=f] Save control link.
+  addi fp, sp, 20                          # [fn=f] `fp` is at old `sp`.
+  li a0, 1                                 # Load integer literal: 1
+  sw a0, -16(fp)                           # [fn=f] store local VAR `x: int` FROM reg `a0`
+  lw a0, -8(fp)                            # [fn=f] load local VAR `x: int` TO reg `a0`
+  j label_1                                # [fn=f] jump to epilogue
+label_1:                                   # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 20                          # restore stack ptr
+  jr ra                                    # return to caller
 
 .globl alloc
 alloc:
@@ -433,8 +345,8 @@ wrapInteger:
 .globl wrapBoolean
 wrapBoolean:
   slli a0, a0, 4
-  la t0, @bool.False
-  add a0, a0, t0
+  la t1, @bool.False
+  add a0, a0, t1
   jr ra
 
 .data
