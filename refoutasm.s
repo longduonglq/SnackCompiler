@@ -314,6 +314,7 @@ $h:
   mv a0, zero                              # Load None
   j label_6                                # Jump to function epilogue
 label_6:                                   # Epilogue
+    ebreak
   .equiv @h.size, 16
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp

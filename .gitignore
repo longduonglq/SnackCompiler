@@ -153,3 +153,8 @@ outasm.s
 refoutasm.s
 stdout.txt
 refstdout.txt
+_bootstrap.s
+ref_call_with_args.s
+refstdout.txt
+stdout.txt
+VarAssignRefoutasm.s
