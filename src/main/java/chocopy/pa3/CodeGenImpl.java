@@ -377,12 +377,10 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-
         @Override
         public Void analyze(IntegerLiteral intLit)
         {
             backend.emitLI(A0, intLit.value, format("Load integer literal: %d", intLit.value));
-            // backend.emitJAL(intClass.get);
             return null;
         }
 
@@ -396,7 +394,7 @@ public class CodeGenImpl extends CodeGenBase {
         protected Integer _pushRegToStack(RiscVBackend.Register reg, String cmt)
         {
             regStack.push(reg);
-            backend.emitADDI(SP, SP, +4, cmt);
+            backend.emitADDI(SP, SP, -4, cmt);
             backend.emitSW(reg, SP, 0, format("push reg %s to stack", reg.toString()));
             return null;
         }
@@ -406,7 +404,7 @@ public class CodeGenImpl extends CodeGenBase {
             if (regStack.isEmpty())
                 throw new RuntimeException("Unbalanced calls to _pushRegToStack and _popRegOffStack");
             backend.emitLW(reg, SP, 0, format("pop stack to reg %s", reg.toString()));
-            backend.emitADDI(SP, SP, -4, cmt);
+            backend.emitADDI(SP, SP, +4, cmt);
             return null;
         }
 
@@ -457,7 +455,7 @@ public class CodeGenImpl extends CodeGenBase {
 
             // TODO: Add the appropriate functionality for nested function calls
 
-            for (int i = ce.args.size() - 1; i >= 0; i--) {
+            for (int i = 0; i < ce.args.size(); i++) {
                 Expr argExpr = ce.args.get(i);
                 String paramName = functionParams.get(i);
                 StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
@@ -466,12 +464,16 @@ public class CodeGenImpl extends CodeGenBase {
                 argExpr.dispatch(this);
 
                 //Handle "wrapping" integers and booleans
-                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.INT_TYPE)) {
+                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
+                        && argExpr.getInferredType().equals(Type.INT_TYPE))
+                {
                     // Call Int Wrapping Code Emitter
                     backend.emitInsn("jal wrapInteger", null);
                 }
 
-                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE) && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
+                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
+                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
+                {
                     // Call Bool Wrapping Code Emitter: Create Bool object
                     backend.emitInsn("jal wrapBoolean", null);
                 }
@@ -507,6 +509,34 @@ public class CodeGenImpl extends CodeGenBase {
             }
 
             backend.emitLocalLabel(finishIfStmtBranch, null);
+            return null;
+        }
+
+        @Override
+        public Void analyze(BinaryExpr be)
+        {
+            be.left.dispatch(this);
+            _pushRegToStack(A0, "Store binop's left operand to stack");
+            be.right.dispatch(this);
+            _popRegOffStack(T1, "Binop's left operand from stack to `T1`.");
+            switch (be.operator)
+            {
+                case "+":
+                    backend.emitADD(A0, T1, A0, "+ two operands");
+                    break;
+                case "-":
+                    backend.emitSUB(A0, T1, A0, "- two operands");
+                    break;
+                case "*":
+                    backend.emitMUL(A0, T1, A0, "* two operands");
+                    break;
+                case "//":
+                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    break;
+                case "%":
+                    backend.emitREM(A0, T1, A0, "% two operands");
+                    break;
+            }
             return null;
         }
     }

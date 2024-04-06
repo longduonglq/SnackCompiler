@@ -159,3 +159,4 @@ refstdout.txt
 stdout.txt
 VarAssignRefoutasm.s
 _bootstrap.s
+_bootstrap.py

@@ -92,10 +92,13 @@ main:
   sw zero, 0(sp)                           # Top saved FP is 0.
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
+  li a0, 4                                 # Load integer literal: 4
+  addi sp, sp, -4                          # push arg 0-th of "f" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
   jal $f                                   # Call function: f
   addi sp, fp, -16                         # Set SP to top of stack
   jal wrapInteger
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
@@ -237,18 +240,27 @@ $f:
   sw fp, 8(sp)                             # [fn=f] Save control link.
   addi fp, sp, 16                          # [fn=f] `fp` is at old `sp`.
   la a0, const_5                           # Load string literal: "start f"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
+  jal wrapInteger
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $print                               # Call function: print
+  addi sp, fp, -16                         # Set SP to top of stack
+  li a0, 1                                 # Load integer literal: 1
+  addi sp, sp, -4                          # push arg 0-th of "g" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  addi sp, sp, -4                          # push arg 1-th of "g" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
   jal $g                                   # Call function: g
   addi sp, fp, -16                         # Set SP to top of stack
   la a0, const_6                           # Load string literal: "end f"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
-  li a0, 42                                # Load integer literal: 42
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
   addi sp, sp, 16                          # Restore stack pointer
@@ -268,14 +280,27 @@ $g:
   sw fp, 8(sp)                             # [fn=g] Save control link.
   addi fp, sp, 16                          # [fn=g] `fp` is at old `sp`.
   la a0, const_7                           # Load string literal: "start g"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
+  jal wrapInteger
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $print                               # Call function: print
+  addi sp, fp, -16                         # Set SP to top of stack
+  jal wrapInteger
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $print                               # Call function: print
+  addi sp, fp, -16                         # Set SP to top of stack
+  la a0, const_8                           # Load string literal: "h"
+  addi sp, sp, -4                          # push arg 0-th of "h" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
   jal $h                                   # Call function: h
   addi sp, fp, -16                         # Set SP to top of stack
-  la a0, const_8                           # Load string literal: "end g"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  la a0, const_9                           # Load string literal: "end g"
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
@@ -294,13 +319,7 @@ $h:
   sw ra, 12(sp)                            # [fn=h] Save return address.
   sw fp, 8(sp)                             # [fn=h] Save control link.
   addi fp, sp, 16                          # [fn=h] `fp` is at old `sp`.
-  la a0, const_9                           # Load string literal: "start h"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
-  sw a0, 0(sp)                             # push reg a0 to stack
-  jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
-  la a0, const_10                          # Load string literal: "end h"
-  addi sp, sp, 4                           # push arg 0-th of "print" to stack
+  addi sp, sp, -4                          # push arg 0-th of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
   addi sp, fp, -16                         # Set SP to top of stack
@@ -345,7 +364,7 @@ alloc2_16:                                 # Copy-loop header
   jr ra                                    # Return to caller
 alloc2_15:                                 # OOM handler
   li a0, @error_oom                        # Exit code for: Out of memory
-  la a1, const_11                          # Load error message as str
+  la a1, const_10                          # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -375,21 +394,21 @@ heap.init:
 .globl error.None
 error.None:
   li a0, 4                                 # Exit code for: Operation on None
-  la a1, const_12                          # Load error message as str
+  la a1, const_11                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.Div
 error.Div:
   li a0, 4                                 # Exit code for: Division by zero
-  la a1, const_13                          # Load error message as str
+  la a1, const_12                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.OOB
 error.OOB:
   li a0, 4                                 # Exit code for: Index out of bounds
-  la a1, const_14                          # Load error message as str
+  la a1, const_13                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -434,8 +453,8 @@ const_1:
   .word 1                                  # Constant value of attribute: __bool__
   .align 2
 
-.globl const_8
-const_8:
+.globl const_9
+const_9:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -443,22 +462,13 @@ const_8:
   .string "end g"                          # Constant value of attribute: __str__
   .align 2
 
-.globl const_9
-const_9:
+.globl const_12
+const_12:
   .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
+  .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 7                                  # Constant value of attribute: __len__
-  .string "start h"                        # Constant value of attribute: __str__
-  .align 2
-
-.globl const_10
-const_10:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 5                                  # Constant value of attribute: __len__
-  .string "end h"                          # Constant value of attribute: __str__
+  .word 16                                 # Constant value of attribute: __len__
+  .string "Division by zero"               # Constant value of attribute: __str__
   .align 2
 
 .globl const_7
@@ -488,13 +498,31 @@ const_6:
   .string "end f"                          # Constant value of attribute: __str__
   .align 2
 
-.globl const_11
-const_11:
+.globl const_10
+const_10:
   .word 3                                  # Type tag for class: str
   .word 8                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
   .word 13                                 # Constant value of attribute: __len__
   .string "Out of memory"                  # Constant value of attribute: __str__
+  .align 2
+
+.globl const_13
+const_13:
+  .word 3                                  # Type tag for class: str
+  .word 9                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 19                                 # Constant value of attribute: __len__
+  .string "Index out of bounds"            # Constant value of attribute: __str__
+  .align 2
+
+.globl const_8
+const_8:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "h"                              # Constant value of attribute: __str__
   .align 2
 
 .globl const_3
@@ -506,35 +534,8 @@ const_3:
   .string "True"                           # Constant value of attribute: __str__
   .align 2
 
-.globl const_4
-const_4:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 5                                  # Constant value of attribute: __len__
-  .string "False"                          # Constant value of attribute: __str__
-  .align 2
-
-.globl const_13
-const_13:
-  .word 3                                  # Type tag for class: str
-  .word 9                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 16                                 # Constant value of attribute: __len__
-  .string "Division by zero"               # Constant value of attribute: __str__
-  .align 2
-
-.globl const_14
-const_14:
-  .word 3                                  # Type tag for class: str
-  .word 9                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 19                                 # Constant value of attribute: __len__
-  .string "Index out of bounds"            # Constant value of attribute: __str__
-  .align 2
-
-.globl const_12
-const_12:
+.globl const_11
+const_11:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -549,4 +550,13 @@ const_2:
   .word $str$dispatchTable                 # Pointer to dispatch table
   .word 16                                 # Constant value of attribute: __len__
   .string "Invalid argument"               # Constant value of attribute: __str__
+  .align 2
+
+.globl const_4
+const_4:
+  .word 3                                  # Type tag for class: str
+  .word 6                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 5                                  # Constant value of attribute: __len__
+  .string "False"                          # Constant value of attribute: __str__
   .align 2
