@@ -33,6 +33,8 @@ public class CodeGenImpl extends CodeGenBase {
     public CodeGenImpl(RiscVBackend backend) {
         super(backend);
         this.bke = backend;
+        bke.defineSym("@bool.True", "const_1");
+        bke.defineSym("@bool.False", "const_0");
     }
 
     /** Operation on None. */
@@ -227,6 +229,17 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitADDI(FP, SP, arSize, format("[fn=%s] `fp` is at old `sp`.", funcInfo.getFuncName()));
 
         StmtAnalyzer stmtAnalyzer = new StmtAnalyzer(funcInfo);
+        // let's first process locally-init variables
+        for (StackVarInfo svi: funcInfo.getLocals())
+        {
+            int idx = funcInfo.getVarIndex(svi.getVarName());
+            if (svi.getVarType().isSpecialType())
+            {
+                svi.getInitialValue().dispatch(stmtAnalyzer);
+                stmtAnalyzer.pushRegToLocalVar(A0, svi);
+            }
+        }
+
         for (Stmt stmt : funcInfo.getStatements())
         {
             stmt.dispatch(stmtAnalyzer);
@@ -378,6 +391,44 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
+        public Void analyze(BinaryExpr be)
+        {
+            be.left.dispatch(this);
+            _pushRegToStack(A0, "Store binop's left operand to stack");
+            be.right.dispatch(this);
+            _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
+            switch (be.operator)
+            {
+                case "+":
+                    backend.emitADD(A0, T1, A0, "+ two operands");
+                    break;
+                case "-":
+                    backend.emitSUB(A0, T1, A0, "- two operands");
+                    break;
+                case "*":
+                    backend.emitMUL(A0, T1, A0, "* two operands");
+                    break;
+                case "//":
+                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    break;
+                case "%":
+                    backend.emitREM(A0, T1, A0, "% two operands");
+                    break;
+                case "==":
+                    backend.emitSNEZ(T1, T1, null);
+                    backend.emitSEQZ(A0, A0, null);
+                    backend.emitXOR(A0, T1, A0, "== operator");
+                    break;
+                case "!=":
+                    backend.emitSNEZ(T1, T1, null);
+                    backend.emitSNEZ(A0, A0, null);
+                    backend.emitXOR(A0, T1, A0, "!= operator");
+                    break;
+            }
+            return null;
+        }
+
+        @Override
         public Void analyze(IntegerLiteral intLit)
         {
             backend.emitLI(A0, intLit.value, format("Load integer literal: %d", intLit.value));
@@ -409,10 +460,11 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(BooleanLiteral bl) {
+        public Void analyze(BooleanLiteral bl)
+        {
             //Store boolean in A0 reg?
             //Booleans - True: 1 and False: 0
-            backend.emitLI(A0, bl.value ? 1 : 0, "Load boolean immediate val into A0");
+            backend.emitLI(A0, bl.value ? 1 : 0, format("Load boolean immediate \"%b\" into A0", bl.value));
             return null;
         }
 
@@ -422,34 +474,19 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-
-        // @Override
-        // public Void analyze(CallExpr ce)
-        // {
-        //     // _rtPrint("At CallExpr: %s\n", ce.function.name);
-        //     // backend.emitInsn("ebreak", "");
-        //     // TODO: static link needs to be dealt with around here (probably)
-        //     // backend.emitADDI(SP, FP, format("-%s", _fnSizeLabel(funcInfo)), "");
-        //     FuncInfo calleeFnInfo = (FuncInfo) sym.get(ce.function.name);
-        //     int fnArSz = _getFnArSize(calleeFnInfo);
-        //     backend.emitADDI(SP, FP, -fnArSz, "sp points to top-of-stack");
-        //     for (int i = ce.args.size() - 1; 0 <= i; i--)
-        //     {
-        //         Expr iarg = ce.args.get(i);
-        //         iarg.dispatch(this);
-        //         _pushRegToStack(A0, format("push arg %d-th of \"%s\" to stack", i, ce.function.name));
-        //         // box the argument.
-        //     }
-
-        //     FuncInfo finfo = (FuncInfo) sym.get(ce.function.name);
-        //     backend.emitJAL(finfo.getCodeLabel(), format("Jump to function %s", finfo.getBaseName()));
-        //     return null;
-        // }
-
         public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
         {
             int varIdx = funcInfo.getVarIndex(svi.getVarName());
             backend.emitLW(reg, FP, -varIdx * backend.getWordSize(),
+                    format("[fn=%s] load local VAR `%s: %s` to reg `%s`",
+                            funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
+            return null;
+        }
+
+        public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi)
+        {
+            int varIdx = funcInfo.getVarIndex(svi.getVarName());
+            backend.emitSW(reg, FP, -varIdx * backend.getWordSize(),
                     format("[fn=%s] load local VAR `%s: %s` to reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
@@ -482,6 +519,14 @@ public class CodeGenImpl extends CodeGenBase {
             }
             else // global scope
             {
+                String idName = id.name;
+                SymbolInfo idSymbolInfo = sym.get(idName);
+
+                //TODO: Support StackVarInfos
+
+                if (idSymbolInfo instanceof GlobalVarInfo) {
+                    backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
+                }
             }
             return null;
         }
@@ -510,14 +555,14 @@ public class CodeGenImpl extends CodeGenBase {
                         && argExpr.getInferredType().equals(Type.INT_TYPE))
                 {
                     // Call Int Wrapping Code Emitter
-                    backend.emitInsn("jal wrapInteger", null);
+                    wrapInteger();
                 }
 
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
                         && argExpr.getInferredType().equals(Type.BOOL_TYPE))
                 {
                     // Call Bool Wrapping Code Emitter: Create Bool object
-                    backend.emitInsn("jal wrapBoolean", null);
+                    wrapBoolean();
                 }
 
                 // backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
@@ -555,31 +600,73 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(BinaryExpr be)
+        public Void analyze(AssignStmt as)
         {
-            be.left.dispatch(this);
-            _pushRegToStack(A0, "Store binop's left operand to stack");
-            be.right.dispatch(this);
-            _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
-            switch (be.operator)
+            as.value.dispatch(this);
+
+            for (Expr targetExpr: as.targets)
             {
-                case "+":
-                    backend.emitADD(A0, T1, A0, "+ two operands");
-                    break;
-                case "-":
-                    backend.emitSUB(A0, T1, A0, "- two operands");
-                    break;
-                case "*":
-                    backend.emitMUL(A0, T1, A0, "* two operands");
-                    break;
-                case "//":
-                    backend.emitDIV(A0, T1, A0, "// two operands");
-                    break;
-                case "%":
-                    backend.emitREM(A0, T1, A0, "% two operands");
-                    break;
+                String targetExprName = ((Identifier) targetExpr).name;
+                SymbolInfo targetExprSymbolInfo = sym.get(targetExprName);
+
+                //box if value is of type int or bool and target type is object
+                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                        as.value.getInferredType().equals(Type.INT_TYPE))
+                {
+                        wrapInteger();
+                }
+
+                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                        as.value.getInferredType().equals(Type.BOOL_TYPE))
+                {
+                    wrapBoolean();
+                }
+
+                GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
+                if (globalTypedVarSymbolInfo != null) {
+                    backend.emitSW(A0, globalTypedVarSymbolInfo.getLabel(), T1, "Store A0 into global var " + globalTypedVarSymbolInfo.getVarName());
+                } else {
+                    emitCodeForLocalVarAssignmentInFunc(targetExprSymbolInfo);
+                }
             }
+
             return null;
+        }
+
+        /* PRIVATE HELPER METHODS */
+        private void wrapInteger() {
+            backend.emitInsn("jal wrapInteger", null);
+        }
+
+        private void wrapBoolean() {
+            backend.emitInsn("jal wrapBoolean", null);
+        }
+
+        private int getIndexOfStackVarInfo(List<StackVarInfo> list, StackVarInfo svi) {
+            for (int i = 0; i < list.size(); i++) {
+                if (svi.equals(list.get(i))) {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        private void emitCodeForLocalVarAssignmentInFunc(SymbolInfo varDefSymbolInfo) {
+            //NOTE: UNTESTED
+            StackVarInfo stackVarDefInfo = (StackVarInfo) varDefSymbolInfo;
+            FuncInfo currFuncInfo = stackVarDefInfo.getFuncInfo();
+
+            while (currFuncInfo != null) {
+                List<StackVarInfo> funcInfoLocals = currFuncInfo.getLocals();
+
+                if (funcInfoLocals.contains(stackVarDefInfo)) {
+                    //Find the index of the stackVarDefInfo in question in funcStackVarInfos
+                    int index = getIndexOfStackVarInfo(funcInfoLocals, stackVarDefInfo);
+                    int offset = 8 + (funcInfoLocals.size() - 1 - index) * backend.getWordSize(); //* from the caller's control link & return link
+                    backend.emitSW(A0, FP, -offset, "SW AO into local variable " + stackVarDefInfo.getVarName());
+                }
+                currFuncInfo = currFuncInfo.getParentFuncInfo();
+            }
         }
     }
 
@@ -627,18 +714,23 @@ public class CodeGenImpl extends CodeGenBase {
 
     private void emitWrappedBoolean() {
         Label emitWrappedBooleanLabel = new Label("wrapBoolean");
-        Label localTrueBranchLabel = generateLocalLabel();
+        // Label localTrueBranchLabel = generateLocalLabel();
+        Label boolFalse = new Label("@bool.False");
 
         backend.emitGlobalLabel(emitWrappedBooleanLabel);
-        backend.emitLI(T0, 1, "Load True into temp reg for comparison");
-        backend.emitBEQ(A0, T0, localTrueBranchLabel, "Check which boolean branch to go to");
-        //False
-        backend.emitLA(A0, constants.getBoolConstant(false), "Load False constant's address into A0");
-        backend.emitJR(RA, "Go back");
-        //True
-        backend.emitLocalLabel(localTrueBranchLabel, "Label for true branch");
-        backend.emitLA(A0, constants.getBoolConstant(true), "Load True constant's address into A0");
-        backend.emitJR(RA, "Go back");
+        backend.emitSLLI(A0, A0, 4, null);
+        backend.emitLA(T1, boolFalse, null);
+        backend.emitADD(A0, A0, T1, null);
+        backend.emitJR(RA, null);
+        // backend.emitLI(T0, 1, "Load True into temp reg for comparison");
+        // backend.emitBEQ(A0, T0, localTrueBranchLabel, "Check which boolean branch to go to");
+        // //False
+        // backend.emitLA(A0, constants.getBoolConstant(false), "Load False constant's address into A0");
+        // backend.emitJR(RA, "Go back");
+        // //True
+        // backend.emitLocalLabel(localTrueBranchLabel, "Label for true branch");
+        // backend.emitLA(A0, constants.getBoolConstant(true), "Load True constant's address into A0");
+        // backend.emitJR(RA, "Go back");
     }
 
     private void emitWrappedInt() {
