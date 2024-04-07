@@ -202,7 +202,7 @@ public class CodeGenImpl extends CodeGenBase {
         //                 .map(s -> s.dispatch(tc))
         //                 .collect(Collectors.toList()));
         return fni.getLocals().size() * 4
-                + 16; // (return addr + control link )
+                + 8; // (return addr + control link )
     }
 
     /**
@@ -265,12 +265,6 @@ public class CodeGenImpl extends CodeGenBase {
 
         backend.emitJ(stmtAnalyzer.epilogue, format("[fn=%s] jump to epilogue", funcInfo.getFuncName()));
 
-        // computes return value
-        // stmt.value.dispatch(this);
-        // backend.emitLW(RA, FP, -4, "Get return address");
-        // backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
-        // backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
-        // backend.emitJR(RA, "Return to caller");
         backend.emitLocalLabel(stmtAnalyzer.epilogue, "Epilogue");
         backend.emitLW(RA, FP, -4, "get return addr");
         backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
@@ -496,8 +490,8 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
         {
-            int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 8,
+            int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
+            backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 4,
                     format("[fn=%s] load local VAR `%s: %s` TO reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
@@ -505,8 +499,11 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi)
         {
-            int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitSW(reg, FP, -varIdx * backend.getWordSize() - 8,
+            int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
+            backend.emitSW(reg, FP,
+                    -varIdx * backend.getWordSize() - 4,
+                    // -4 here because the return addr + control link is already accounted
+                    // for in the result of getVarIndex and the fact that fp is a past-the-beginning pointer
                     format("[fn=%s] store local VAR `%s: %s` FROM reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
@@ -549,7 +546,7 @@ public class CodeGenImpl extends CodeGenBase {
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
                             backend.emitLW(A0, T0,
-                                    +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize() - 8,
+                                    +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize(),
                                     format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
                                             actualOuterScope.getFuncName(),
                                             svi.getVarName(),

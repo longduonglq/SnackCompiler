@@ -95,12 +95,12 @@ main:
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
   jal $f                                   # Call function: f
-  addi sp, fp, -20                         # Set SP to top of stack
+  addi sp, fp, -12                         # Set SP to top of stack
   jal wrapInteger
   addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
   sw a0, 0(sp)                             # push reg a0 to stack
   jal $print                               # Call function: print
-  addi sp, fp, -16                         # Set SP to top of stack
+  addi sp, fp, -8                          # Set SP to top of stack
   li a0, 10                                # Code for ecall: exit
   ecall
 
@@ -234,18 +234,18 @@ input_done:
 
 .globl $f
 $f:
-  addi sp, sp, -20                         # [fn=f] Reserve space for stack frame
-  sw ra, 16(sp)                            # [fn=f] Save return address.
-  sw fp, 12(sp)                            # [fn=f] Save control link.
-  addi fp, sp, 20                          # [fn=f] `fp` is at old `sp`.
+  addi sp, sp, -12                         # [fn=f] Reserve space for stack frame
+  sw ra, 8(sp)                             # [fn=f] Save return address.
+  sw fp, 4(sp)                             # [fn=f] Save control link.
+  addi fp, sp, 12                          # [fn=f] `fp` is at old `sp`.
   li a0, 1                                 # Load integer literal: 1
-  sw a0, -16(fp)                           # [fn=f] store local VAR `x: int` FROM reg `a0`
-  lw a0, -8(fp)                            # [fn=f] load local VAR `x: int` TO reg `a0`
+  sw a0, -12(fp)                           # [fn=f] store local VAR `x: int` FROM reg `a0`
+  lw a0, -12(fp)                           # [fn=f] load local VAR `x: int` TO reg `a0`
   j label_1                                # [fn=f] jump to epilogue
 label_1:                                   # Epilogue
   lw ra, -4(fp)                            # get return addr
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, 20                          # restore stack ptr
+  addi sp, sp, 12                          # restore stack ptr
   jr ra                                    # return to caller
 
 .globl alloc
