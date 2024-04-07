@@ -402,21 +402,41 @@ public class CodeGenImpl extends CodeGenBase {
         {
             // TODO: this assumes that an @f.size constant had been defined. It hasn't been (yet).
             // computes return value
-            // stmt.value.dispatch(this);
-            // backend.emitLW(RA, FP, -4, "Get return address");
-            // backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
-            // backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
-            // backend.emitJR(RA, "Return to caller");
+             stmt.value.dispatch(this);
+             backend.emitLW(RA, FP, -4, "Get return address");
+             backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+             backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
+             backend.emitJR(RA, "Return to caller");
             return null;
         }
 
         @Override
         public Void analyze(BinaryExpr be)
         {
+            Label evaluateSecondExpressionLocalLabel = generateLocalLabel();
+            Label exitBinaryExprLocalLabel = generateLocalLabel();
+
             be.left.dispatch(this);
             _pushRegToStack(A0, "Store binop's left operand to stack");
+
+            //OR short-circuiting
+            if (be.operator.equals("or")) {
+                backend.emitLI(T0, 1, "Load 1 into temp reg");
+                backend.emitBEQ(A0, T0, exitBinaryExprLocalLabel, "Compare if A0 is true");
+                backend.emitJ(evaluateSecondExpressionLocalLabel, "Jump to exit binary expr local label");
+            }
+
+            //AND short-circuiting
+            if (be.operator.equals("and")) {
+                backend.emitLI(T0, 0, "Load 0 into temp reg");
+                backend.emitBEQ(A0, T0, exitBinaryExprLocalLabel, "Compare if A0 is false");
+                backend.emitJ(evaluateSecondExpressionLocalLabel, "Jump to exit binary expr local label");
+            }
+
+            backend.emitLocalLabel(evaluateSecondExpressionLocalLabel, "Evaluate OR second expression");
             be.right.dispatch(this);
             _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
+
             switch (be.operator)
             {
                 case "+":
@@ -435,16 +455,76 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitREM(A0, T1, A0, "% two operands");
                     break;
                 case "==":
-                    backend.emitSNEZ(T1, T1, null);
-                    backend.emitSEQZ(A0, A0, null);
-                    backend.emitXOR(A0, T1, A0, "== operator");
+                    //Erroring
+                    //backend.emitSNEZ(T1, T1, null);
+                    //backend.emitSEQZ(A0, A0, null);
+                    //backend.emitXOR(A0, T1, A0, "== operator");
+
+                    Label equalLocalLabel = generateLocalLabel();
+                    Label exitLocalLabel = generateLocalLabel();
+                    backend.emitBEQ(A0, T1, equalLocalLabel, "Compare if A0 & T1 are equal");
+                    backend.emitLI(A0, 0, "Set A0 to be False (0)");
+                    backend.emitJ(exitLocalLabel, "Jump to exit local label");
+                    backend.emitLocalLabel(equalLocalLabel, "Equal Local Label");
+                    backend.emitLI(A0, 1, "Set A0 to be True (1)");
+                    backend.emitLocalLabel(exitLocalLabel, "Exit Local Label");
                     break;
                 case "!=":
-                    backend.emitSNEZ(T1, T1, null);
-                    backend.emitSNEZ(A0, A0, null);
-                    backend.emitXOR(A0, T1, A0, "!= operator");
+                    //Erroring
+                    //backend.emitSNEZ(T1, T1, null);
+                    //backend.emitSNEZ(A0, A0, null);
+                    //backend.emitXOR(A0, T1, A0, "!= operator");
+
+                    Label equalLocalLabel2 = generateLocalLabel();
+                    Label exitLocalLabel2 = generateLocalLabel();
+                    backend.emitBEQ(A0, T1, equalLocalLabel2, "Compare if A0 & T1 are equal");
+                    backend.emitLI(A0, 1, "Set A0 to be True (1)");
+                    backend.emitJ(exitLocalLabel2, "Jump to exit local label");
+                    backend.emitLocalLabel(equalLocalLabel2, "Equal local label");
+                    backend.emitLI(A0, 0, "Set A0 to be False (0)");
+                    backend.emitLocalLabel(exitLocalLabel2, "Exit local label");
+                    break;
+                case ">":
+                    backend.emitSUB(A0, A0, T1, "Subtract T1 (Left) from A0 (Right)");
+                    backend.emitLI(T2, 0, "Load 0 into temp reg");
+                    backend.emitSLT(A0, A0, T2, "Check if A0 < 0, if so set A0 to 0 else 1");
+                    break;
+                case ">=":
+                    Label greaterOrEqualLocalLabel = generateLocalLabel();
+                    Label exitLocalLabel3 = generateLocalLabel();
+                    backend.emitBGE(T1, A0, greaterOrEqualLocalLabel, "Compare if T1 >= A0");
+                    backend.emitLI(A0, 0 ,"T1 is NOT greater than A0, Set A0 to False (0)");
+                    backend.emitJ(exitLocalLabel3, "Jump to exit local label");
+                    backend.emitLocalLabel(greaterOrEqualLocalLabel, null);
+                    backend.emitLI(A0, 1 ,"T1 is greater than A0, Set A0 to True (1)");
+                    backend.emitLocalLabel(exitLocalLabel3, "Exit local label");
+                    break;
+                case "<":
+                    backend.emitSUB(A0, T1, A0, "Subtract A0 (Right) from T1 (Left)");
+                    backend.emitLI(T2, 0, "Load 0 into temp reg");
+                    backend.emitSLT(A0, A0, T2, "Check if A0 < 0, if so set A0 to 0 else 1");
+                    break;
+                case "<=":
+                    Label lessOrEqualLocalLabel = generateLocalLabel();
+                    Label exitLocalLabel4 = generateLocalLabel();
+                    backend.emitBGE(A0, T1, lessOrEqualLocalLabel, "Compare if T1 <= A0");
+                    backend.emitLI(A0, 0 ,"A0 is NOT greater than T1, Set A0 to False (0)");
+                    backend.emitJ(exitLocalLabel4, "Jump to exit local label");
+                    backend.emitLocalLabel(lessOrEqualLocalLabel, "Less than or equal to local label");
+                    backend.emitLI(A0, 1 ,"A0 is greater than T1, Set A0 to True (1)");
+                    backend.emitLocalLabel(exitLocalLabel4, "Exit local label");
+                    break;
+                case "or":
+                    backend.emitOR(A0, A0, T1, "OR A0 and T1");
+                    break;
+                case "and":
+                    backend.emitOR(A0, A0, T1, "OR A0 and T1");
+                    backend.emitLI(T0, 0, "Load 0 into temp reg");
+                    backend.emitSUB(A0, T0, A0, "Negate OR operation to get ADD");
                     break;
             }
+
+            backend.emitLocalLabel(exitBinaryExprLocalLabel, "Exit binary expression local label");
             return null;
         }
 
@@ -527,7 +607,7 @@ public class CodeGenImpl extends CodeGenBase {
             if (funcInfo != null)
             {
                 if (funcInfo.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
-                    || funcInfo.getParams().contains(id.name))
+                        || funcInfo.getParams().contains(id.name))
                 {
                     int index = funcInfo.getVarIndex(id.name);
                     VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
@@ -579,6 +659,18 @@ public class CodeGenImpl extends CodeGenBase {
                 {
                     backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
                 }
+            }
+            return null;
+        }
+
+        @Override
+        public Void analyze(UnaryExpr ue) {
+            String operator = ue.operator;
+            ue.operand.dispatch(this);
+
+            if (operator.equals("-")) {
+                backend.emitLI(T0, -1, "Store -1");
+                backend.emitMUL(A0, A0, T0, "Multiply A0 by -1");
             }
             return null;
         }
@@ -680,7 +772,7 @@ public class CodeGenImpl extends CodeGenBase {
                 if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
                         as.value.getInferredType().equals(Type.INT_TYPE))
                 {
-                        wrapInteger();
+                    wrapInteger();
                 }
 
                 if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
@@ -701,8 +793,25 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(FuncDef fd)
-        {
+        public Void analyze(WhileStmt ws) {
+            Label whileTopLocalLabel = generateLocalLabel();
+            Label whileTrueBodyLabel = generateLocalLabel();
+            Label exitWhileLocalLabel = generateLocalLabel();
+
+            //Check if condition is true or not
+            backend.emitLocalLabel(whileTopLocalLabel, "Top of while loop");
+            ws.condition.dispatch(this);
+            backend.emitLI(T0, 1, "Store 1 into temp reg");
+            backend.emitBEQ(A0, T0, whileTrueBodyLabel, "Check if condition is true");
+            backend.emitJ(exitWhileLocalLabel, "Jump to bottom of while loop to exit");
+            //While Loop Body
+            backend.emitLocalLabel(whileTrueBodyLabel, "While loop body");
+            for (Stmt bodyStmt: ws.body) {
+                bodyStmt.dispatch(this);
+            }
+            backend.emitJ(whileTopLocalLabel, "Go back to top of while loop");
+
+            backend.emitLocalLabel(exitWhileLocalLabel, "Bottom of while loop");
             return null;
         }
 
@@ -787,23 +896,24 @@ public class CodeGenImpl extends CodeGenBase {
 
     private void emitWrappedBoolean() {
         Label emitWrappedBooleanLabel = new Label("wrapBoolean");
-        // Label localTrueBranchLabel = generateLocalLabel();
+        Label localTrueBranchLabel = generateLocalLabel();
         Label boolFalse = new Label("@bool.False");
 
         backend.emitGlobalLabel(emitWrappedBooleanLabel);
-        backend.emitSLLI(A0, A0, 4, null);
-        backend.emitLA(T1, boolFalse, null);
-        backend.emitADD(A0, A0, T1, null);
-        backend.emitJR(RA, null);
-        // backend.emitLI(T0, 1, "Load True into temp reg for comparison");
-        // backend.emitBEQ(A0, T0, localTrueBranchLabel, "Check which boolean branch to go to");
-        // //False
-        // backend.emitLA(A0, constants.getBoolConstant(false), "Load False constant's address into A0");
-        // backend.emitJR(RA, "Go back");
-        // //True
-        // backend.emitLocalLabel(localTrueBranchLabel, "Label for true branch");
-        // backend.emitLA(A0, constants.getBoolConstant(true), "Load True constant's address into A0");
-        // backend.emitJR(RA, "Go back");
+        //Erroring
+        //        backend.emitSLLI(A0, A0, 4, null);
+        //        backend.emitLA(T1, boolFalse, null);
+        //        backend.emitADD(A0, A0, T1, null);
+        //        backend.emitJR(RA, null);
+         backend.emitLI(T0, 1, "Load True into temp reg for comparison");
+         backend.emitBEQ(A0, T0, localTrueBranchLabel, "Check which boolean branch to go to");
+         //False
+         backend.emitLA(A0, constants.getBoolConstant(false), "Load False constant's address into A0");
+         backend.emitJR(RA, "Go back");
+         //True
+         backend.emitLocalLabel(localTrueBranchLabel, "Label for true branch");
+         backend.emitLA(A0, constants.getBoolConstant(true), "Load True constant's address into A0");
+         backend.emitJR(RA, "Go back");
     }
 
     private void emitWrappedInt() {
