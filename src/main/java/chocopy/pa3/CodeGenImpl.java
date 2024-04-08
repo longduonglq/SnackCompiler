@@ -462,7 +462,7 @@ public class CodeGenImpl extends CodeGenBase {
 
                     Label equalLocalLabel = generateLocalLabel();
                     Label exitLocalLabel = generateLocalLabel();
-                    backend.emitBEQ(A0, T1, equalLocalLabel, "Compare if A0 & T1 are equal");
+                    backend.emitBEQ(A0, T1, equalLocalLabel, "==: Compare if A0 & T1 are equal");
                     backend.emitLI(A0, 0, "Set A0 to be False (0)");
                     backend.emitJ(exitLocalLabel, "Jump to exit local label");
                     backend.emitLocalLabel(equalLocalLabel, "Equal Local Label");
@@ -477,7 +477,7 @@ public class CodeGenImpl extends CodeGenBase {
 
                     Label equalLocalLabel2 = generateLocalLabel();
                     Label exitLocalLabel2 = generateLocalLabel();
-                    backend.emitBEQ(A0, T1, equalLocalLabel2, "Compare if A0 & T1 are equal");
+                    backend.emitBEQ(A0, T1, equalLocalLabel2, "!=: Compare if A0 & T1 are equal");
                     backend.emitLI(A0, 1, "Set A0 to be True (1)");
                     backend.emitJ(exitLocalLabel2, "Jump to exit local label");
                     backend.emitLocalLabel(equalLocalLabel2, "Equal local label");
@@ -485,14 +485,14 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitLocalLabel(exitLocalLabel2, "Exit local label");
                     break;
                 case ">":
-                    backend.emitSUB(A0, A0, T1, "Subtract T1 (Left) from A0 (Right)");
+                    backend.emitSUB(A0, A0, T1, ">: Subtract T1 (Left) from A0 (Right)");
                     backend.emitLI(T2, 0, "Load 0 into temp reg");
                     backend.emitSLT(A0, A0, T2, "Check if A0 < 0, if so set A0 to 0 else 1");
                     break;
                 case ">=":
                     Label greaterOrEqualLocalLabel = generateLocalLabel();
                     Label exitLocalLabel3 = generateLocalLabel();
-                    backend.emitBGE(T1, A0, greaterOrEqualLocalLabel, "Compare if T1 >= A0");
+                    backend.emitBGE(T1, A0, greaterOrEqualLocalLabel, ">=: Compare if T1 >= A0");
                     backend.emitLI(A0, 0 ,"T1 is NOT greater than A0, Set A0 to False (0)");
                     backend.emitJ(exitLocalLabel3, "Jump to exit local label");
                     backend.emitLocalLabel(greaterOrEqualLocalLabel, null);
@@ -500,14 +500,14 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitLocalLabel(exitLocalLabel3, "Exit local label");
                     break;
                 case "<":
-                    backend.emitSUB(A0, T1, A0, "Subtract A0 (Right) from T1 (Left)");
+                    backend.emitSUB(A0, T1, A0, "<: Subtract A0 (Right) from T1 (Left)");
                     backend.emitLI(T2, 0, "Load 0 into temp reg");
                     backend.emitSLT(A0, A0, T2, "Check if A0 < 0, if so set A0 to 0 else 1");
                     break;
                 case "<=":
                     Label lessOrEqualLocalLabel = generateLocalLabel();
                     Label exitLocalLabel4 = generateLocalLabel();
-                    backend.emitBGE(A0, T1, lessOrEqualLocalLabel, "Compare if T1 <= A0");
+                    backend.emitBGE(A0, T1, lessOrEqualLocalLabel, "<=: Compare if T1 <= A0");
                     backend.emitLI(A0, 0 ,"A0 is NOT greater than T1, Set A0 to False (0)");
                     backend.emitJ(exitLocalLabel4, "Jump to exit local label");
                     backend.emitLocalLabel(lessOrEqualLocalLabel, "Less than or equal to local label");
@@ -515,10 +515,10 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitLocalLabel(exitLocalLabel4, "Exit local label");
                     break;
                 case "or":
-                    backend.emitOR(A0, A0, T1, "OR A0 and T1");
+                    backend.emitOR(A0, A0, T1, "or: OR A0 and T1");
                     break;
                 case "and":
-                    backend.emitOR(A0, A0, T1, "OR A0 and T1");
+                    backend.emitOR(A0, A0, T1, "and: OR A0 and T1");
                     backend.emitLI(T0, 0, "Load 0 into temp reg");
                     backend.emitSUB(A0, T0, A0, "Negate OR operation to get ADD");
                     break;
@@ -576,8 +576,8 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
         {
-            int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 8,
+            int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
+            backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 4,
                     format("[fn=%s] load local VAR `%s: %s` TO reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
@@ -585,12 +585,16 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi)
         {
-            int varIdx = funcInfo.getVarIndex(svi.getVarName());
-            backend.emitSW(reg, FP, -varIdx * backend.getWordSize() - 8,
+            int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
+            backend.emitSW(reg, FP,
+                    -varIdx * backend.getWordSize() - 4,
+                    // -4 here because the return addr + control link is already accounted
+                    // for in the result of getVarIndex and the fact that fp is a past-the-beginning pointer
                     format("[fn=%s] store local VAR `%s: %s` FROM reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
             return null;
         }
+
 
         public Void loadLocalParamToReg(VarInfo svi, RiscVBackend.Register reg)
         {
@@ -598,6 +602,29 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitLW(reg, FP, +(funcInfo.getParams().size() - 1 - varIdx) * backend.getWordSize(),
                     format("[fn=%s] load local PARAM `%s: %s` to reg `%s`",
                             funcInfo.getFuncName(), svi.getVarName(), svi.getVarType(), reg.toString()));
+            return null;
+        }
+
+        public Void loadLocalVarToReg(
+                FuncInfo fn, int varIdx, RiscVBackend.Register fp, RiscVBackend.Register dest, String cmt)
+        {
+            int maxParamIndex = fn.getParams().size() - 1;
+            int maxLocalIndex = fn.getLocals().size() + fn.getParams().size() + 2 - 1;
+            int offsetFromFP;
+            if (varIdx <= maxParamIndex) // is param
+            {
+                offsetFromFP = maxParamIndex - varIdx;
+                if (varIdx == -1 && fn.getParentFuncInfo() == null)
+                    throw new IllegalArgumentException("trying to get static link but function not nested");
+                backend.emitLW(dest, fp, +offsetFromFP * backend.getWordSize(), cmt);
+            }
+            else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
+            {
+                offsetFromFP = varIdx - funcInfo.getParams().size();
+                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
+            }
+            else throw new IllegalArgumentException("should be unreachable");
+
             return null;
         }
 
@@ -619,17 +646,18 @@ public class CodeGenImpl extends CodeGenBase {
                 }
                 else // id must be nonlocal
                 {
+                    //Walk up the static links to find the correct scope that hosts the desired identifier
                     FuncInfo actualOuterScope = funcInfo;
-                    backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
-                    while (true)
+                    backend.emitMV(T0, FP, format("Configuration for getting static link of %s", actualOuterScope.getFuncName()));
+                    while (actualOuterScope != null)
                     {
                         if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)))
                         {
                             // t0 should now have the fp of the static-scope's AR
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
-                            backend.emitLW(A0, T0,
-                                    +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize() - 8,
+                            int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
+                            backend.emitLW(A0, T0, offset,
                                     format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
                                             actualOuterScope.getFuncName(),
                                             svi.getVarName(),
@@ -639,27 +667,26 @@ public class CodeGenImpl extends CodeGenBase {
                         }
                         else
                         {
-                            backend.emitLW(T0, T0, 0,
+
+                            String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
+                            loadLocalVarToReg(actualOuterScope, -1, T0, T0,
                                     format("Load static link from %s to %s",
                                             actualOuterScope.getFuncName(),
-                                            actualOuterScope.getParentFuncInfo().getFuncName()));
+                                            parentFuncInfoName));
                             actualOuterScope = actualOuterScope.getParentFuncInfo();
                         }
                     }
                 }
             }
-            else // global scope
+
+            String idName = id.name;
+            SymbolInfo idSymbolInfo = sym.get(idName);
+
+            if (idSymbolInfo instanceof GlobalVarInfo)
             {
-                String idName = id.name;
-                SymbolInfo idSymbolInfo = sym.get(idName);
-
-                //TODO: Support StackVarInfos
-
-                if (idSymbolInfo instanceof GlobalVarInfo)
-                {
-                    backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
-                }
+                backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
             }
+
             return null;
         }
 
@@ -682,13 +709,15 @@ public class CodeGenImpl extends CodeGenBase {
             List<String> functionParams = functionInfo.getParams();
             int fnArSz = _getFnArSize(functionInfo);
 
+            System.out.println("Function Call: " + functionName);
+
             // If the callee is statically nested, first push the `static link`
             if (functionInfo.getParentFuncInfo() != null)
             {
                 // Retrieve a static link to the static outer scope.
-                FuncInfo staticOuterScope = (FuncInfo) functionInfo.getParentFuncInfo();
-                FuncInfo actualOuterScope = (FuncInfo) funcInfo;
-                backend.emitMV(T0, FP, format("Get static link to %s", functionInfo.getFuncName()));
+                FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
+                FuncInfo actualOuterScope = funcInfo;
+                backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
                 while (!actualOuterScope.equals(staticOuterScope))
                 {
                     actualOuterScope = actualOuterScope.getParentFuncInfo();
@@ -781,11 +810,36 @@ public class CodeGenImpl extends CodeGenBase {
                     wrapBoolean();
                 }
 
-                GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
-                if (globalTypedVarSymbolInfo != null) {
+
+                if (targetExprSymbolInfo instanceof  GlobalVarInfo) {
+                    GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
+
                     backend.emitSW(A0, globalTypedVarSymbolInfo.getLabel(), T1, "Store A0 into global var " + globalTypedVarSymbolInfo.getVarName());
-                } else {
-                    emitCodeForLocalVarAssignmentInFunc(targetExprSymbolInfo);
+                } else if (targetExprSymbolInfo instanceof StackVarInfo) {
+                    StackVarInfo stackVarInfo = (StackVarInfo) targetExprSymbolInfo;
+                    FuncInfo actualOuterScope = funcInfo;
+                    backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
+                    while (actualOuterScope != null) {
+                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(stackVarInfo.getVarName()))) {
+                            // t0 should now have the fp of the static-scope's AR
+                            StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(stackVarInfo.getVarName());
+                            int varIdx = actualOuterScope.getVarIndex(stackVarInfo.getVarName());
+                            int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
+                            backend.emitSW(A0, T0, offset,
+                                    format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                                            actualOuterScope.getFuncName(),
+                                            svi.getVarName(),
+                                            svi.getVarType(),
+                                            "A0"));
+                            break;
+                        } else {
+                            backend.emitLW(T0, T0, 0,
+                                    format("Load static link from %s to %s",
+                                            actualOuterScope.getFuncName(),
+                                            actualOuterScope.getParentFuncInfo().getFuncName()));
+                            actualOuterScope = actualOuterScope.getParentFuncInfo();
+                        }
+                    }
                 }
             }
 
@@ -822,33 +876,6 @@ public class CodeGenImpl extends CodeGenBase {
 
         private void wrapBoolean() {
             backend.emitInsn("jal wrapBoolean", null);
-        }
-
-        private int getIndexOfStackVarInfo(List<StackVarInfo> list, StackVarInfo svi) {
-            for (int i = 0; i < list.size(); i++) {
-                if (svi.equals(list.get(i))) {
-                    return i;
-                }
-            }
-            return 0;
-        }
-
-        private void emitCodeForLocalVarAssignmentInFunc(SymbolInfo varDefSymbolInfo) {
-            //NOTE: UNTESTED
-            StackVarInfo stackVarDefInfo = (StackVarInfo) varDefSymbolInfo;
-            FuncInfo currFuncInfo = stackVarDefInfo.getFuncInfo();
-
-            while (currFuncInfo != null) {
-                List<StackVarInfo> funcInfoLocals = currFuncInfo.getLocals();
-
-                if (funcInfoLocals.contains(stackVarDefInfo)) {
-                    //Find the index of the stackVarDefInfo in question in funcStackVarInfos
-                    int index = getIndexOfStackVarInfo(funcInfoLocals, stackVarDefInfo);
-                    int offset = 8 + (funcInfoLocals.size() - 1 - index) * backend.getWordSize(); //* from the caller's control link & return link
-                    backend.emitSW(A0, FP, -offset, "SW AO into local variable " + stackVarDefInfo.getVarName());
-                }
-                currFuncInfo = currFuncInfo.getParentFuncInfo();
-            }
         }
     }
 
