@@ -78,6 +78,10 @@ $bool$dispatchTable:
 $str$dispatchTable:
   .word $object.__init__                   # Implementation for method: str.__init__
 
+.globl $g
+$g:
+  .word 1                                  # Initial value of global var: g
+
 .text
 
 .globl main
@@ -94,7 +98,10 @@ main:
   sw zero, 0(sp)                           # Top saved FP is 0.
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
-  jal $f                                   # Call function: f
+  lw a0, $g                                # Load identifier label into A0
+  addi sp, sp, -4                          # push arg 0-th `x` of "foo" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $foo                                 # Call function: foo
   addi sp, fp, -12                         # Set SP to top of stack
   jal wrapInteger
   addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
@@ -230,19 +237,86 @@ input_done:
   lw fp, -8(fp)
   addi sp, sp, 16
   jr ra
-  #--------------------------------------------------( f )-------------------------------------------------- # 
+  #--------------------------------------------------( foo.bar.baz )-------------------------------------------------- # 
 
-.globl $f
-$f:
-  addi sp, sp, -12                         # [fn=f] Reserve space for stack frame
-  sw ra, 8(sp)                             # [fn=f] Save return address.
-  sw fp, 4(sp)                             # [fn=f] Save control link.
-  addi fp, sp, 12                          # [fn=f] `fp` is at old `sp`.
-  li a0, 1                                 # Load integer literal: 1
-  sw a0, -12(fp)                           # [fn=f] store local VAR `x: int` FROM reg `a0`
-  lw a0, -12(fp)                           # [fn=f] load local VAR `x: int` TO reg `a0`
-  j label_1                                # [fn=f] jump to epilogue
+.globl $foo.bar.baz
+$foo.bar.baz:
+  addi sp, sp, -8                          # [fn=foo.bar.baz] Reserve space for stack frame
+  sw ra, 4(sp)                             # [fn=foo.bar.baz] Save return address.
+  sw fp, 0(sp)                             # [fn=foo.bar.baz] Save control link.
+  addi fp, sp, 8                           # [fn=foo.bar.baz] `fp` is at old `sp`.
+  mv t0, fp                                # Get static link to foo.qux
+  lw t0, 0(t0)                             # Get static link to foo.bar.baz
+  lw t0, 0(t0)                             # Get static link to foo.bar
+  addi sp, sp, -4                          # Push static link to "foo" to stack
+  sw t0, 0(sp)                             # push reg t0 to stack
+  mv t0, fp                                # Get static link of foo.bar.baz
+  lw t0, 0(t0)                             # Load static link from foo.bar.baz to foo.bar
+  lw t0, 0(t0)                             # Load static link from foo.bar to foo
+  lw a0, -12(t0)                           # [fn=foo] load NON-LOCAL param `y: int` to reg A0
+  addi sp, sp, -4                          # push arg 0-th `p` of "qux" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $foo.qux                             # Call function: qux
+  addi sp, fp, -8                          # Set SP to top of stack
+  j label_1                                # [fn=foo.bar.baz] jump to epilogue
 label_1:                                   # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 8                           # restore stack ptr
+  jr ra                                    # return to caller
+  #--------------------------------------------------( foo.bar )-------------------------------------------------- # 
+
+.globl $foo.bar
+$foo.bar:
+  addi sp, sp, -12                         # [fn=foo.bar] Reserve space for stack frame
+  sw ra, 8(sp)                             # [fn=foo.bar] Save return address.
+  sw fp, 4(sp)                             # [fn=foo.bar] Save control link.
+  addi fp, sp, 12                          # [fn=foo.bar] `fp` is at old `sp`.
+  li a0, 3                                 # Load integer literal: 3
+  sw a0, -12(fp)                           # [fn=foo.bar] store local VAR `z: int` FROM reg `a0`
+  mv t0, fp                                # Get static link to foo.bar.baz
+  addi sp, sp, -4                          # Push static link to "foo.bar" to stack
+  sw t0, 0(sp)                             # push reg t0 to stack
+  jal $foo.bar.baz                         # Call function: baz
+  addi sp, fp, -8                          # Set SP to top of stack
+  j label_2                                # [fn=foo.bar] jump to epilogue
+label_2:                                   # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 12                          # restore stack ptr
+  jr ra                                    # return to caller
+  #--------------------------------------------------( foo.qux )-------------------------------------------------- # 
+
+.globl $foo.qux
+$foo.qux:
+  addi sp, sp, -8                          # [fn=foo.qux] Reserve space for stack frame
+  sw ra, 4(sp)                             # [fn=foo.qux] Save return address.
+  sw fp, 0(sp)                             # [fn=foo.qux] Save control link.
+  addi fp, sp, 8                           # [fn=foo.qux] `fp` is at old `sp`.
+  lw a0, 0(fp)                             # [fn=foo.qux] load local PARAM `p: int` to reg `a0`
+  j label_3                                # [fn=foo.qux] jump to epilogue
+label_3:                                   # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 8                           # restore stack ptr
+  jr ra                                    # return to caller
+  #--------------------------------------------------( foo )-------------------------------------------------- # 
+
+.globl $foo
+$foo:
+  addi sp, sp, -12                         # [fn=foo] Reserve space for stack frame
+  sw ra, 8(sp)                             # [fn=foo] Save return address.
+  sw fp, 4(sp)                             # [fn=foo] Save control link.
+  addi fp, sp, 12                          # [fn=foo] `fp` is at old `sp`.
+  li a0, 2                                 # Load integer literal: 2
+  sw a0, -12(fp)                           # [fn=foo] store local VAR `y: int` FROM reg `a0`
+  mv t0, fp                                # Get static link to foo.bar
+  addi sp, sp, -4                          # Push static link to "foo" to stack
+  sw t0, 0(sp)                             # push reg t0 to stack
+  jal $foo.bar                             # Call function: bar
+  addi sp, fp, -12                         # Set SP to top of stack
+  j label_4                                # [fn=foo] jump to epilogue
+label_4:                                   # Epilogue
   lw ra, -4(fp)                            # get return addr
   lw fp, -8(fp)                            # Use control link to restore caller's fp
   addi sp, sp, 12                          # restore stack ptr

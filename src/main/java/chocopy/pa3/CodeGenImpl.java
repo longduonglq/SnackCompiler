@@ -509,6 +509,32 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
+        // not tested thoroughly.
+        // varIdx could be -1 to indicate trying to load a static link
+        public Void loadLocalVarToReg(
+                FuncInfo fn, int varIdx, RiscVBackend.Register fp, RiscVBackend.Register dest, String cmt)
+        {
+            int maxParamIndex = fn.getParams().size() - 1;
+            int maxLocalIndex = fn.getLocals().size() + fn.getParams().size() + 2 -1;
+            VarInfo vi = null;
+            int offsetFromFP;
+            if (varIdx <= maxParamIndex) // is param
+            {
+                offsetFromFP = maxParamIndex - varIdx;
+                if (varIdx == -1 && fn.getParentFuncInfo() == null)
+                    throw new IllegalArgumentException("trying to get static link but function not nested");
+                backend.emitLW(dest, fp, +offsetFromFP * backend.getWordSize(), cmt);
+            }
+            else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
+            {
+                offsetFromFP = varIdx - funcInfo.getParams().size();
+                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
+            }
+            else throw new IllegalArgumentException("should be unreachable");
+
+            return null;
+        }
+
         public Void loadLocalParamToReg(VarInfo svi, RiscVBackend.Register reg)
         {
             int varIdx = funcInfo.getVarIndex(svi.getVarName());
@@ -556,7 +582,11 @@ public class CodeGenImpl extends CodeGenBase {
                         }
                         else
                         {
-                            backend.emitLW(T0, T0, 0,
+                            // backend.emitLW(T0, T0, 0,
+                            //         format("Load static link from %s to %s",
+                            //                 actualOuterScope.getFuncName(),
+                            //                 actualOuterScope.getParentFuncInfo().getFuncName()));
+                            loadLocalVarToReg(actualOuterScope, -1, T0, T0,
                                     format("Load static link from %s to %s",
                                             actualOuterScope.getFuncName(),
                                             actualOuterScope.getParentFuncInfo().getFuncName()));
@@ -596,9 +626,13 @@ public class CodeGenImpl extends CodeGenBase {
                 backend.emitMV(T0, FP, format("Get static link to %s", functionInfo.getFuncName()));
                 while (!actualOuterScope.equals(staticOuterScope))
                 {
-                    actualOuterScope = actualOuterScope.getParentFuncInfo();
                     // deference static link
-                    backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
+                    // backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
+                    loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                            format("Get static link from %s to %s",
+                                    actualOuterScope.getFuncName(),
+                                    actualOuterScope.getParentFuncInfo().getFuncName()));
+                    actualOuterScope = actualOuterScope.getParentFuncInfo();
                 }
                 // now push static link as sort of "-1"-st argument.
                 _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
