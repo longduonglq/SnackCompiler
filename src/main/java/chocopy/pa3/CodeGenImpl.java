@@ -528,7 +528,7 @@ public class CodeGenImpl extends CodeGenBase {
             else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
             {
                 offsetFromFP = varIdx - funcInfo.getParams().size();
-                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
+                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize(), cmt);
             }
             else throw new IllegalArgumentException("should be unreachable");
 
@@ -566,14 +566,21 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
                     while (true)
                     {
-                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)))
+                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
+                            || actualOuterScope.getParams().stream().anyMatch(p -> p.equals(id.name)))
                         {
                             // t0 should now have the fp of the static-scope's AR
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
-                            backend.emitLW(A0, T0,
-                                    +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize(),
-                                    format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                            // backend.emitLW(A0, T0,
+                            //         +(actualOuterScope.getParams().size() - 1 - varIdx) * backend.getWordSize(),
+                            //         format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                            //                 actualOuterScope.getFuncName(),
+                            //                 svi.getVarName(),
+                            //                 svi.getVarType(),
+                            //                 "A0"));
+                            loadLocalVarToReg(actualOuterScope, varIdx, T0, A0,
+                                    format("[fn=%s] load NON-LOCAL var/param `%s: %s` to reg %s",
                                             actualOuterScope.getFuncName(),
                                             svi.getVarName(),
                                             svi.getVarType(),
