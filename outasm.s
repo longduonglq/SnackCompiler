@@ -102,6 +102,47 @@ main:
   sw zero, 0(sp)                           # Top saved FP is 0.
   sw zero, 4(sp)                           # Top saved RA is 0.
   addi fp, sp, 8                           # Set FP to previous SP.
+label_1:                                   # Top of while loop
+  lw a0, $i                                # Load identifier label into A0
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_4:                                   # Evaluate OR second expression
+  lw a0, $n                                # Load identifier label into A0
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  bge a0, t1, label_6                      # <=: Compare if T1 <= A0
+  li a0, 0                                 # A0 is NOT greater than T1, Set A0 to False (0)
+  j label_7                                # Jump to exit local label
+label_6:                                   # Less than or equal to local label
+  li a0, 1                                 # A0 is greater than T1, Set A0 to True (1)
+label_7:                                   # Exit local label
+label_5:                                   # Exit binary expression local label
+  li t0, 1                                 # Store 1 into temp reg
+  beq a0, t0, label_2                      # Check if condition is true
+  j label_3                                # Jump to bottom of while loop to exit
+label_2:                                   # While loop body
+  lw a0, $i                                # Load identifier label into A0
+  addi sp, sp, -4                          # push arg 0-th `n` of "get_prime" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $get_prime                           # Call function: get_prime
+  addi sp, fp, -16                         # Set SP to top of stack
+  jal wrapInteger
+  addi sp, sp, -4                          # push arg 0-th `arg` of "print" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $print                               # Call function: print
+  addi sp, fp, -8                          # Set SP to top of stack
+  lw a0, $i                                # Load identifier label into A0
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_8:                                   # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  add a0, t1, a0                           # + two operands
+label_9:                                   # Exit binary expression local label
+  sw a0, $i, t1                            # Store A0 into global var i
+  j label_1                                # Go back to top of while loop
+label_3:                                   # Bottom of while loop
   li a0, 10                                # Code for ecall: exit
   ecall
 
@@ -243,9 +284,76 @@ $get_prime:
   sw a0, -12(fp)                           # [fn=get_prime] store local VAR `candidate: int` FROM reg `a0`
   li a0, 0                                 # Load integer literal: 0
   sw a0, -16(fp)                           # [fn=get_prime] store local VAR `found: int` FROM reg `a0`
+label_11:                                  # Top of while loop
+  li a0, 1                                 # Load boolean immediate "true" into A0
+  li t0, 1                                 # Store 1 into temp reg
+  beq a0, t0, label_12                     # Check if condition is true
+  j label_13                               # Jump to bottom of while loop to exit
+label_12:                                  # While loop body
+  lw a0, -12(fp)                           # [fn=get_prime] load local VAR `candidate: int` TO reg `a0`
+  addi sp, sp, -4                          # push arg 0-th `x` of "is_prime" to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+  jal $is_prime                            # Call function: is_prime
+  addi sp, fp, -12                         # Set SP to top of stack
+  beqz a0, label_14                        # If A0 == 0, jump to falseElseBranch
+  lw a0, -16(fp)                           # [fn=get_prime] load local VAR `found: int` TO reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_16:                                  # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  add a0, t1, a0                           # + two operands
+label_17:                                  # Exit binary expression local label
+  mv t0, fp                                # Get static link of get_prime
+  sw a0, -16(t0)                           # [fn=get_prime] load NON-LOCAL param `found: int` to reg A0
+  lw a0, -16(fp)                           # [fn=get_prime] load local VAR `found: int` TO reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_20:                                  # Evaluate OR second expression
+  lw a0, 0(fp)                             # [fn=get_prime] load local PARAM `n: int` to reg `a0`
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  beq a0, t1, label_22                     # ==: Compare if A0 & T1 are equal
+  li a0, 0                                 # Set A0 to be False (0)
+  j label_23                               # Jump to exit local label
+label_22:                                  # Equal Local Label
+  li a0, 1                                 # Set A0 to be True (1)
+label_23:                                  # Exit Local Label
+label_21:                                  # Exit binary expression local label
+  beqz a0, label_18                        # If A0 == 0, jump to falseElseBranch
+  lw a0, -12(fp)                           # [fn=get_prime] load local VAR `candidate: int` TO reg `a0`
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 16                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  jal label_19
+label_18::
+label_19::
+  jal label_15
+label_14::
+label_15::
+  lw a0, -12(fp)                           # [fn=get_prime] load local VAR `candidate: int` TO reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_24:                                  # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  add a0, t1, a0                           # + two operands
+label_25:                                  # Exit binary expression local label
+  mv t0, fp                                # Get static link of get_prime
+  sw a0, -12(t0)                           # [fn=get_prime] load NON-LOCAL param `candidate: int` to reg A0
+  j label_11                               # Go back to top of while loop
+label_13:                                  # Bottom of while loop
   li a0, 0                                 # Load integer literal: 0
-  j label_1                                # [fn=get_prime] jump to epilogue
-label_1:                                   # Epilogue
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 16                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  li a0, 0                                 # Load integer literal: 0
+  j label_10                               # [fn=get_prime] jump to epilogue
+label_10:                                  # Epilogue
   lw ra, -4(fp)                            # get return addr
   lw fp, -8(fp)                            # Use control link to restore caller's fp
   addi sp, sp, 16                          # restore stack ptr
@@ -260,9 +368,74 @@ $is_prime:
   addi fp, sp, 12                          # [fn=is_prime] `fp` is at old `sp`.
   li a0, 2                                 # Load integer literal: 2
   sw a0, -12(fp)                           # [fn=is_prime] store local VAR `div: int` FROM reg `a0`
+label_27:                                  # Top of while loop
+  lw a0, -12(fp)                           # [fn=is_prime] load local VAR `div: int` TO reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_30:                                  # Evaluate OR second expression
+  lw a0, 0(fp)                             # [fn=is_prime] load local PARAM `x: int` to reg `a0`
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  sub a0, t1, a0                           # <: Subtract A0 (Right) from T1 (Left)
+  li t2, 0                                 # Load 0 into temp reg
+  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 0 else 1
+label_31:                                  # Exit binary expression local label
+  li t0, 1                                 # Store 1 into temp reg
+  beq a0, t0, label_28                     # Check if condition is true
+  j label_29                               # Jump to bottom of while loop to exit
+label_28:                                  # While loop body
+  lw a0, 0(fp)                             # [fn=is_prime] load local PARAM `x: int` to reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_36:                                  # Evaluate OR second expression
+  lw a0, -12(fp)                           # [fn=is_prime] load local VAR `div: int` TO reg `a0`
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  rem a0, t1, a0                           # % two operands
+label_37:                                  # Exit binary expression local label
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_34:                                  # Evaluate OR second expression
+  li a0, 0                                 # Load integer literal: 0
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  beq a0, t1, label_38                     # ==: Compare if A0 & T1 are equal
+  li a0, 0                                 # Set A0 to be False (0)
+  j label_39                               # Jump to exit local label
+label_38:                                  # Equal Local Label
+  li a0, 1                                 # Set A0 to be True (1)
+label_39:                                  # Exit Local Label
+label_35:                                  # Exit binary expression local label
+  beqz a0, label_32                        # If A0 == 0, jump to falseElseBranch
+  li a0, 0                                 # Load boolean immediate "false" into A0
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 12                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  jal label_33
+label_32::
+label_33::
+  lw a0, -12(fp)                           # [fn=is_prime] load local VAR `div: int` TO reg `a0`
+  addi sp, sp, -4                          # Store binop's left operand to stack
+  sw a0, 0(sp)                             # push reg a0 to stack
+label_40:                                  # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 0(sp)                             # pop stack to reg t1
+  addi sp, sp, 4                           # Binop's left operand from stack to `T1`.
+  add a0, t1, a0                           # + two operands
+label_41:                                  # Exit binary expression local label
+  mv t0, fp                                # Get static link of is_prime
+  sw a0, -12(t0)                           # [fn=is_prime] load NON-LOCAL param `div: int` to reg A0
+  j label_27                               # Go back to top of while loop
+label_29:                                  # Bottom of while loop
   li a0, 1                                 # Load boolean immediate "true" into A0
-  j label_2                                # [fn=is_prime] jump to epilogue
-label_2:                                   # Epilogue
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 12                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  li a0, 1                                 # Load boolean immediate "true" into A0
+  j label_26                               # [fn=is_prime] jump to epilogue
+label_26:                                  # Epilogue
   lw ra, -4(fp)                            # get return addr
   lw fp, -8(fp)                            # Use control link to restore caller's fp
   addi sp, sp, 12                          # restore stack ptr
@@ -364,10 +537,13 @@ wrapInteger:
 
 .globl wrapBoolean
 wrapBoolean:
-  slli a0, a0, 4
-  la t1, @bool.False
-  add a0, a0, t1
-  jr ra
+  li t0, 1                                 # Load True into temp reg for comparison
+  beq a0, t0, label_42                     # Check which boolean branch to go to
+  la a0, const_0                           # Load False constant's address into A0
+  jr ra                                    # Go back
+label_42:                                  # Label for true branch
+  la a0, const_1                           # Load True constant's address into A0
+  jr ra                                    # Go back
 
 .data
 
