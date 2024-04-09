@@ -644,35 +644,44 @@ public class CodeGenImpl extends CodeGenBase {
                         return loadLocalVarToReg(vi, A0);
                     }
                 }
-                else // id must be nonlocal
+                else // id must be nonlocal or declared somewhere in a previous scope
                 {
                     //Walk up the static links to find the correct scope that hosts the desired identifier
                     FuncInfo actualOuterScope = funcInfo;
                     backend.emitMV(T0, FP, format("Configuration for getting static link of %s", actualOuterScope.getFuncName()));
                     while (actualOuterScope != null)
                     {
-                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)))
+                        if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)) ||
+                                actualOuterScope.getParams().contains(id.name))
                         {
                             // t0 should now have the fp of the static-scope's AR
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
-                            int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
-                            backend.emitLW(A0, T0, offset,
-                                    format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
-                                            actualOuterScope.getFuncName(),
-                                            svi.getVarName(),
-                                            svi.getVarType(),
-                                            "A0"));
+
+                            if (varIdx < actualOuterScope.getParams().size()) {
+                                return loadLocalVarToReg(actualOuterScope, varIdx, T0, A0, "Load param " + svi.getVarName() + " into A0");
+                            } else {
+                                int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
+                                backend.emitLW(A0, T0, offset,
+                                        format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                                                actualOuterScope.getFuncName(),
+                                                svi.getVarName(),
+                                                svi.getVarType(),
+                                                "A0"));
+                            }
                             break;
                         }
                         else
                         {
-
                             String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
-                            loadLocalVarToReg(actualOuterScope, -1, T0, T0,
-                                    format("Load static link from %s to %s",
-                                            actualOuterScope.getFuncName(),
-                                            parentFuncInfoName));
+
+                            if (actualOuterScope.getParentFuncInfo() != null) {
+                                loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                                        format("Load static link from %s to %s",
+                                                actualOuterScope.getFuncName(),
+                                                parentFuncInfoName));
+                            }
+
                             actualOuterScope = actualOuterScope.getParentFuncInfo();
                         }
                     }
@@ -708,8 +717,6 @@ public class CodeGenImpl extends CodeGenBase {
             FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
             List<String> functionParams = functionInfo.getParams();
             int fnArSz = _getFnArSize(functionInfo);
-
-            System.out.println("Function Call: " + functionName);
 
             // If the callee is statically nested, first push the `static link`
             if (functionInfo.getParentFuncInfo() != null)
@@ -819,12 +826,14 @@ public class CodeGenImpl extends CodeGenBase {
                     StackVarInfo stackVarInfo = (StackVarInfo) targetExprSymbolInfo;
                     FuncInfo actualOuterScope = funcInfo;
                     backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
+
                     while (actualOuterScope != null) {
                         if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(stackVarInfo.getVarName()))) {
                             // t0 should now have the fp of the static-scope's AR
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(stackVarInfo.getVarName());
                             int varIdx = actualOuterScope.getVarIndex(stackVarInfo.getVarName());
                             int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
+
                             backend.emitSW(A0, T0, offset,
                                     format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
                                             actualOuterScope.getFuncName(),
@@ -833,10 +842,18 @@ public class CodeGenImpl extends CodeGenBase {
                                             "A0"));
                             break;
                         } else {
-                            backend.emitLW(T0, T0, 0,
-                                    format("Load static link from %s to %s",
-                                            actualOuterScope.getFuncName(),
-                                            actualOuterScope.getParentFuncInfo().getFuncName()));
+//                            backend.emitLW(T0, T0, 0,
+//                                    format("Load static link from %s to %s",
+//                                            actualOuterScope.getFuncName(),
+//                                            actualOuterScope.getParentFuncInfo().getFuncName()));
+//                            actualOuterScope = actualOuterScope.getParentFuncInfo();
+                            String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
+                            if (actualOuterScope.getParentFuncInfo() != null) {
+                                loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                                        format("Load static link from %s to %s",
+                                                actualOuterScope.getFuncName(),
+                                                parentFuncInfoName));
+                            }
                             actualOuterScope = actualOuterScope.getParentFuncInfo();
                         }
                     }
