@@ -608,7 +608,7 @@ public class CodeGenImpl extends CodeGenBase {
             else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
             {
                 offsetFromFP = varIdx - funcInfo.getParams().size();
-                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize(), cmt);
+                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
             }
             else throw new IllegalArgumentException("should be unreachable");
 
