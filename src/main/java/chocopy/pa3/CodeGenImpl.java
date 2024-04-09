@@ -820,9 +820,12 @@ public class CodeGenImpl extends CodeGenBase {
                 }
 
                 GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
-                if (globalTypedVarSymbolInfo != null) {
+                if (globalTypedVarSymbolInfo != null)
+                {
                     backend.emitSW(A0, globalTypedVarSymbolInfo.getLabel(), T1, "Store A0 into global var " + globalTypedVarSymbolInfo.getVarName());
-                } else {
+                }
+                else
+                {
                     emitCodeForLocalVarAssignmentInFunc(targetExprSymbolInfo);
                 }
             }
