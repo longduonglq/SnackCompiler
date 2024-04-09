@@ -767,7 +767,7 @@ public class CodeGenImpl extends CodeGenBase {
             }
 
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
-            backend.emitADDI(SP, FP, -fnArSz, "Set SP to top of stack");
+            backend.emitADDI(SP, FP, -fnArSz - 4, "Set SP to top of stack");
             return null;
         }
 
@@ -843,11 +843,6 @@ public class CodeGenImpl extends CodeGenBase {
                                             "A0"));
                             break;
                         } else {
-//                            backend.emitLW(T0, T0, 0,
-//                                    format("Load static link from %s to %s",
-//                                            actualOuterScope.getFuncName(),
-//                                            actualOuterScope.getParentFuncInfo().getFuncName()));
-//                            actualOuterScope = actualOuterScope.getParentFuncInfo();
                             String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
                             if (actualOuterScope.getParentFuncInfo() != null) {
                                 loadLocalVarToReg(actualOuterScope, -1, T0, T0,
