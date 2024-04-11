@@ -80,13 +80,13 @@ $bool$dispatchTable:
 $str$dispatchTable:
   .word $object.__init__                   # Implementation for method: str.__init__
 
-.globl $n
-$n:
-  .word 15                                 # Initial value of global var: n
+.globl $z
+$z:
+  .word 0                                  # Initial value of global var: z
 
 .globl $i
 $i:
-  .word 1                                  # Initial value of global var: i
+  .word 0                                  # Initial value of global var: i
 
 .text
 
@@ -105,13 +105,52 @@ main:
   sw fp, @..main.size-8(sp)                # control link
   addi fp, sp, @..main.size                # New fp is at old SP.
   jal initchars                            # Initialize one-character strings.
-  j label_2                                # Jump to loop test
-label_1:                                   # Top of while loop
-  lw a0, $i                                # Load global: i
+  li a0, 1                                 # Load integer literal 1
+  sw a0, -20(fp)                           # Push argument 3 from last.
+  li a0, 2                                 # Load integer literal 2
+  sw a0, -24(fp)                           # Push argument 2 from last.
+  li a0, 3                                 # Load integer literal 3
+  sw a0, -28(fp)                           # Push argument 1 from last.
+  li a0, 3                                 # Pass list length
   sw a0, -32(fp)                           # Push argument 0 from last.
   addi sp, fp, -32                         # Set SP to last argument.
-  jal $get_prime                           # Invoke function: get_prime
+  jal conslist                             # Move values to new list object
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  sw a0, -12(fp)                           # Push argument 1 from last.
+  li a0, 4                                 # Load integer literal 4
+  sw a0, -20(fp)                           # Push argument 3 from last.
+  li a0, 5                                 # Load integer literal 5
+  sw a0, -24(fp)                           # Push argument 2 from last.
+  li a0, 6                                 # Load integer literal 6
+  sw a0, -28(fp)                           # Push argument 1 from last.
+  li a0, 3                                 # Pass list length
+  sw a0, -32(fp)                           # Push argument 0 from last.
+  addi sp, fp, -32                         # Set SP to last argument.
+  jal conslist                             # Move values to new list object
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $concat                              # Invoke function: concat
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  sw a0, $z, t0                            # Assign global: z (using tmp register)
+  j label_2                                # Jump to loop test
+label_1:                                   # Top of while loop
+  lw a0, $z                                # Load global: z
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $i                                # Load global: i
+  lw a1, -20(fp)                           # Pop stack slot 5
+  bnez a1, label_3                         # Ensure not None
+  j error.None                             # Go to error handler
+label_3:                                   # Not None
+  lw t0, 12(a1)                            # Load attribute: __len__
+  bltu a0, t0, label_4                     # Ensure 0 <= index < len
+  j error.OOB                              # Go to error handler
+label_4:                                   # Index within bounds
+  addi a0, a0, 4                           # Compute list element offset in words
+  li t0, 4                                 # Word size in bytes
+  mul a0, a0, t0                           # Compute list element offset in bytes
+  add a0, a1, a0                           # Pointer to list element
+  lw a0, 0(a0)                             # Get list element
   jal makeint                              # Box integer
   sw a0, -16(fp)                           # Push argument 0 from last.
   addi sp, fp, -16                         # Set SP to last argument.
@@ -126,9 +165,13 @@ label_1:                                   # Top of while loop
 label_2:                                   # Test loop condition
   lw a0, $i                                # Load global: i
   sw a0, -12(fp)                           # Push on stack slot 3
-  lw a0, $n                                # Load global: n
+  lw a0, $z                                # Load global: z
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $len                                 # Invoke function: len
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
   lw t0, -12(fp)                           # Pop stack slot 3
-  bge a0, t0, label_1                      # Branch on <=
+  blt t0, a0, label_1                      # Branch on <
   .equiv @..main.size, 32
 label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
@@ -261,112 +304,31 @@ input_done:
   addi sp, sp, 16
   jr ra
 
-.globl $get_prime
-$get_prime:
-  addi sp, sp, -@get_prime.size            # Reserve space for stack frame.
-  sw ra, @get_prime.size-4(sp)             # return address
-  sw fp, @get_prime.size-8(sp)             # control link
-  addi fp, sp, @get_prime.size             # New fp is at old SP.
-  li a0, 2                                 # Load integer literal 2
-  sw a0, -12(fp)                           # local variable candidate
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -16(fp)                           # local variable found
-  j label_6                                # Jump to loop test
-label_5:                                   # Top of while loop
-  lw a0, -12(fp)                           # Load var: get_prime.candidate
+.globl $concat
+$concat:
+  addi sp, sp, -@concat.size               # Reserve space for stack frame.
+  sw ra, @concat.size-4(sp)                # return address
+  sw fp, @concat.size-8(sp)                # control link
+  addi fp, sp, @concat.size                # New fp is at old SP.
+  la t0, noconv                            # Identity conversion
+  sw t0, -20(fp)                           # Push argument 3 from last.
+  la t0, noconv                            # Identity conversion
+  sw t0, -24(fp)                           # Push argument 2 from last.
+  lw a0, 4(fp)                             # Load var: concat.x
+  sw a0, -28(fp)                           # Push argument 1 from last.
+  lw a0, 0(fp)                             # Load var: concat.y
   sw a0, -32(fp)                           # Push argument 0 from last.
   addi sp, fp, -32                         # Set SP to last argument.
-  jal $is_prime                            # Invoke function: is_prime
-  addi sp, fp, -@get_prime.size            # Set SP to stack frame top.
-  beqz a0, label_7                         # Branch on false.
-  lw a0, -16(fp)                           # Load var: get_prime.found
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 1                                 # Load integer literal 1
-  lw t0, -20(fp)                           # Pop stack slot 5
-  add a0, t0, a0                           # Operator +
-  sw a0, -16(fp)                           # Assign var: get_prime.found
-  lw a0, -16(fp)                           # Load var: get_prime.found
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, 0(fp)                             # Load var: get_prime.n
-  lw t0, -20(fp)                           # Pop stack slot 5
-  bne t0, a0, label_8                      # Branch on not ==
-  lw a0, -12(fp)                           # Load var: get_prime.candidate
-  j label_4                                # Go to return
-label_8:                                   # End of if-else statement
-label_7:                                   # End of if-else statement
-  lw a0, -12(fp)                           # Load var: get_prime.candidate
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 1                                 # Load integer literal 1
-  lw t0, -20(fp)                           # Pop stack slot 5
-  add a0, t0, a0                           # Operator +
-  sw a0, -12(fp)                           # Assign var: get_prime.candidate
-label_6:                                   # Test loop condition
-  j label_5                                # Branch on true.
-  li a0, 0                                 # Load integer literal 0
-  j label_4                                # Go to return
+  jal concat                               # Call runtime concatenation routine.
+  addi sp, fp, -@concat.size               # Set SP to stack frame top.
+  j label_6                                # Go to return
   mv a0, zero                              # Load None
-  j label_4                                # Jump to function epilogue
-label_4:                                   # Epilogue
-  .equiv @get_prime.size, 32
+  j label_6                                # Jump to function epilogue
+label_6:                                   # Epilogue
+  .equiv @concat.size, 32
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @get_prime.size             # Restore stack pointer
-  jr ra                                    # Return to caller
-
-.globl $is_prime
-$is_prime:
-  addi sp, sp, -@is_prime.size             # Reserve space for stack frame.
-  sw ra, @is_prime.size-4(sp)              # return address
-  sw fp, @is_prime.size-8(sp)              # control link
-  addi fp, sp, @is_prime.size              # New fp is at old SP.
-  li a0, 2                                 # Load integer literal 2
-  sw a0, -12(fp)                           # local variable div
-  j label_12                               # Jump to loop test
-label_11:                                  # Top of while loop
-  lw a0, 0(fp)                             # Load var: is_prime.x
-  sw a0, -16(fp)                           # Push on stack slot 4
-  lw a0, -12(fp)                           # Load var: is_prime.div
-  lw t0, -16(fp)                           # Pop stack slot 4
-  bnez a0, label_14                        # Ensure non-zero divisor
-  j error.Div                              # Go to error handler
-label_14:                                  # Divisor is non-zero
-  rem t2, t0, a0                           # Operator rem
-  beqz t2, label_15                        # If no remainder, no adjustment
-  xor t3, t2, a0                           # Check for differing signs.
-  bgez t3, label_15                        # Don't adjust if signs equal.
-  add a0, t2, a0                           # Adjust
-  j label_16
-label_15:                                  # Store result
-  mv a0, t2
-label_16:                                  # End of %
-  sw a0, -16(fp)                           # Push on stack slot 4
-  li a0, 0                                 # Load integer literal 0
-  lw t0, -16(fp)                           # Pop stack slot 4
-  bne t0, a0, label_13                     # Branch on not ==
-  li a0, 0                                 # Load boolean literal: false
-  j label_10                               # Go to return
-label_13:                                  # End of if-else statement
-  lw a0, -12(fp)                           # Load var: is_prime.div
-  sw a0, -16(fp)                           # Push on stack slot 4
-  li a0, 1                                 # Load integer literal 1
-  lw t0, -16(fp)                           # Pop stack slot 4
-  add a0, t0, a0                           # Operator +
-  sw a0, -12(fp)                           # Assign var: is_prime.div
-label_12:                                  # Test loop condition
-  lw a0, -12(fp)                           # Load var: is_prime.div
-  sw a0, -16(fp)                           # Push on stack slot 4
-  lw a0, 0(fp)                             # Load var: is_prime.x
-  lw t0, -16(fp)                           # Pop stack slot 4
-  blt t0, a0, label_11                     # Branch on <
-  li a0, 1                                 # Load boolean literal: true
-  j label_10                               # Go to return
-  mv a0, zero                              # Load None
-  j label_10                               # Jump to function epilogue
-label_10:                                  # Epilogue
-  .equiv @is_prime.size, 16
-  lw ra, -4(fp)                            # Get return address
-  lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @is_prime.size              # Restore stack pointer
+  addi sp, sp, @concat.size                # Restore stack pointer
   jr ra                                    # Return to caller
 
 .globl alloc

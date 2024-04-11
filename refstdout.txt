@@ -1,3 +1,3 @@
-Reading _bootstrap.py
-FS
-17
+Reading src/test/data/pa3/sample/list_get_element_oob_1.py.ast.typed
+Index out of bounds
+Exited with error code 3

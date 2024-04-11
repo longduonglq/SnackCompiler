@@ -1,6 +1,7 @@
 def f():
-    l:int = 17
-    print("FS")
-    print(l)
+    l:[[int]] = None
+    l = [[1,2,3]] + [[2,3,4]]
+    print(l[1][1])
+    return None
 
 f()

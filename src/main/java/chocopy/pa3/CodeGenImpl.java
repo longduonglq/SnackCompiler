@@ -3,17 +3,21 @@ package chocopy.pa3;
 import java.util.Collections;
 import java.util.List;
 import java.util.Stack;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
 import chocopy.common.analysis.types.ClassValueType;
 import chocopy.common.analysis.types.Type;
+import chocopy.common.analysis.types.ValueType;
 import chocopy.common.astnodes.*;
 import chocopy.common.codegen.*;
 
 import static chocopy.common.codegen.RiscVBackend.Register.*;
 import static java.lang.String.format;
+
 
 /**
  * This is where the main implementation of PA3 will live.
@@ -29,32 +33,43 @@ import static java.lang.String.format;
  */
 public class CodeGenImpl extends CodeGenBase {
 
-    /** A code generator emitting instructions to BACKEND. */
+    /**
+     * A code generator emitting instructions to BACKEND.
+     */
     public CodeGenImpl(RiscVBackend backend) {
         super(backend);
         this.bke = backend;
         bke.defineSym("@bool.True", "const_1");
         bke.defineSym("@bool.False", "const_0");
+        bke.defineSym("@listHeaderWords", "4");
     }
 
-    /** Operation on None. */
+    /**
+     * Operation on None.
+     */
     private final Label errorNone = new Label("error.None");
-    /** Division by zero. */
+    /**
+     * Division by zero.
+     */
     private final Label errorDiv = new Label("error.Div");
-    /** Index out of bounds. */
+    /**
+     * Index out of bounds.
+     */
     private final Label errorOob = new Label("error.OOB");
 
     private final boolean _EMIT_RT_TRACE = true;
+    private final Label consListLabel = new Label("conslist");
 
     protected final RiscVBackend bke;
+
     /**
      * Emits the top level of the program.
-     *
+     * <p>
      * This method is invoked exactly once, and is surrounded
      * by some boilerplate code that: (1) initializes the heap
      * before the top-level begins and (2) exits after the top-level
      * ends.
-     *
+     * <p>
      * You only need to generate code for statements.
      *
      * @param statements top level statements
@@ -62,34 +77,32 @@ public class CodeGenImpl extends CodeGenBase {
     protected void emitTopLevel(List<Stmt> statements) {
         StmtAnalyzer stmtAnalyzer = new StmtAnalyzer(null);
         backend.emitADDI(SP, SP, -2 * backend.getWordSize(),
-                         "Saved FP and saved RA (unused at top level).");
+                "Saved FP and saved RA (unused at top level).");
         backend.emitSW(ZERO, SP, 0, "Top saved FP is 0.");
         backend.emitSW(ZERO, SP, 4, "Top saved RA is 0.");
         backend.emitADDI(FP, SP, 2 * backend.getWordSize(),
-                         "Set FP to previous SP.");
+                "Set FP to previous SP.");
 
-        for (Stmt stmt : statements)
-        {
+        for (Stmt stmt : statements) {
             stmt.dispatch(stmtAnalyzer);
         }
         backend.emitLI(A0, EXIT_ECALL, "Code for ecall: exit");
         backend.emitEcall(null);
     }
 
-    protected String _fnSizeLabel (FuncInfo fi) { return format("@%s.size", fi.getBaseName()); }
+    protected String _fnSizeLabel(FuncInfo fi) {
+        return format("@%s.size", fi.getBaseName());
+    }
 
-    protected void _emitSeparator(String title, String r)
-    {
+    protected void _emitSeparator(String title, String r) {
         r = r == null ? "-" : r;
         final int L = 50;
         String sep = new String(new char[L]).replace("\0", r);
-        backend.emitInsn( format("#%s( %s )%s", sep, title, sep) , "");
+        backend.emitInsn(format("#%s( %s )%s", sep, title, sep), "");
     }
 
-    protected void _rtPrintChar(char c)
-    {
-        if (_EMIT_RT_TRACE)
-        {
+    protected void _rtPrintChar(char c) {
+        if (_EMIT_RT_TRACE) {
             bke.emitADDI(SP, SP, -8, "[debug] reserve space for a0, a1");
             bke.emitSW(A0, SP, +4, "[debug] store old a0");
             bke.emitSW(A1, SP, +0, "[debug] store old a1");
@@ -104,10 +117,8 @@ public class CodeGenImpl extends CodeGenBase {
         }
     }
 
-    protected void _rtPrintInt(RiscVBackend.Register reg)
-    {
-        if (_EMIT_RT_TRACE)
-        {
+    protected void _rtPrintInt(RiscVBackend.Register reg) {
+        if (_EMIT_RT_TRACE) {
             bke.emitADDI(SP, SP, -8, "[debug] reserve space for a0, a1");
             bke.emitSW(A0, SP, +4, "[debug] store old a0");
             bke.emitSW(A1, SP, +0, "[debug] store old a1");
@@ -123,10 +134,8 @@ public class CodeGenImpl extends CodeGenBase {
     }
 
     // runtimePrint
-    protected void __rtPrint(String fmt, Object...args)
-    {
-        if (_EMIT_RT_TRACE)
-        {
+    protected void __rtPrint(String fmt, Object... args) {
+        if (_EMIT_RT_TRACE) {
             Label str = constants.getStrConstant(format(fmt, args));
 
             // callee
@@ -145,18 +154,15 @@ public class CodeGenImpl extends CodeGenBase {
         }
     }
 
-    protected void _rtPrint(String fmt, Object...args)
-    {
+    protected void _rtPrint(String fmt, Object... args) {
         if (_EMIT_RT_TRACE) {
             __rtPrint("[TRACE]: " + fmt, args);
         }
     }
-    protected void _rtPrintRegs(RiscVBackend.Register...regs)
-    {
-        if (_EMIT_RT_TRACE)
-        {
-            for (RiscVBackend.Register reg : regs)
-            {
+
+    protected void _rtPrintRegs(RiscVBackend.Register... regs) {
+        if (_EMIT_RT_TRACE) {
+            for (RiscVBackend.Register reg : regs) {
                 _rtPrint("REG[%s] = ", reg.toString());
                 _rtPrintInt(reg);
                 _rtPrintChar('\n');
@@ -165,18 +171,15 @@ public class CodeGenImpl extends CodeGenBase {
     }
 
     // prints memory region from `ptr` to `ptr + size`, unit of `size` is `word`
-    protected void _rtPrintMem(RiscVBackend.Register ptr, int size)
-    {
-        if (_EMIT_RT_TRACE)
-        {
+    protected void _rtPrintMem(RiscVBackend.Register ptr, int size) {
+        if (_EMIT_RT_TRACE) {
             Label regValueDumpSite = constants.getIntConstant(1984);
             _rtPrint(format("&> MEM region size %d words starting at: ", size));
             _rtPrintRegs(ptr);
             bke.emitADDI(SP, SP, -4, "[debug] space for: old a0 value");
             bke.emitSW(A0, SP, +0, "[debug] saves old a0 value");
             // unroll loop for simple codegen. could be improved. this will generate large assembly for large `size`.
-            for (int i = 0; i < size; i++)
-            {
+            for (int i = 0; i < size; i++) {
                 _rtPrint("\tMEM[");
                 bke.emitMV(A0, ptr, format("[debug] move reg %s to a0", ptr));
                 bke.emitADDI(A0, A0, i * 4, format("[debug] get addr of the %d-th word", i));
@@ -193,7 +196,7 @@ public class CodeGenImpl extends CodeGenBase {
         }
     }
 
-    protected int _getFnArSize(FuncInfo fni)
+    protected int _getFnTempsCount(FuncInfo fni)
     {
         // TransientsCount tc = new TransientsCount();
         // Integer maxTempsCount = Collections.max(
@@ -201,21 +204,28 @@ public class CodeGenImpl extends CodeGenBase {
         //                 .stream()
         //                 .map(s -> s.dispatch(tc))
         //                 .collect(Collectors.toList()));
+        // return maxTempsCount;
+        return 8;
+    }
+
+    protected int _getFnArSize(FuncInfo fni)
+    {
         return fni.getLocals().size() * 4
-                + 8; // (return addr + control link )
+                + 8 // (return addr + control link )
+                + _getFnTempsCount(fni) * 4
+                ;
     }
 
     /**
      * Emits the code for a function described by FUNCINFO.
-     *
+     * <p>
      * This method is invoked once per function and method definition.
      * At the code generation stage, nested functions are emitted as
      * separate functions of their own. So if function `bar` is nested within
      * function `foo`, you only emit `foo`'s code for `foo` and only emit
      * `bar`'s code for `bar`.
      */
-    protected void emitUserDefinedFunction(FuncInfo funcInfo)
-    {
+    protected void emitUserDefinedFunction(FuncInfo funcInfo) {
         _emitSeparator(funcInfo.getFuncName(), null);
         backend.emitGlobalLabel(funcInfo.getCodeLabel());
         // _rtPrint("In func %s\n", funcInfo.getFuncName());
@@ -232,35 +242,29 @@ public class CodeGenImpl extends CodeGenBase {
 
         StmtAnalyzer stmtAnalyzer = new StmtAnalyzer(funcInfo);
         // let's first process locally-init variables
-        for (StackVarInfo svi: funcInfo.getLocals())
-        {
+        for (StackVarInfo svi : funcInfo.getLocals()) {
             // int idx = funcInfo.getVarIndex(svi.getVarName());
-            if (svi.getVarType().isSpecialType())
-            {
+            if (svi.getVarType().isSpecialType()) {
                 svi.getInitialValue().dispatch(stmtAnalyzer);
                 stmtAnalyzer.pushRegToLocalVar(A0, svi);
             }
         }
 
-        for (Stmt stmt : funcInfo.getStatements())
-        {
+        for (Stmt stmt : funcInfo.getStatements()) {
             stmt.dispatch(stmtAnalyzer);
         }
 
         // if no explicit final return statement, return None implicitly
-        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
-        {
+        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt)) {
             backend.emitMV(A0, ZERO, format("[fn=%s] Returning None implicitly", funcInfo.getFuncName()));
-        }
-        else
-        {
-            ReturnStmt rs = (ReturnStmt)funcInfo
-                    .getStatements()
-                    .stream()
-                    .filter(stmt -> stmt instanceof ReturnStmt)
-                    .findAny()
-                    .get();
-            rs.value.dispatch(stmtAnalyzer);
+        } else {
+            // ReturnStmt rs = (ReturnStmt) funcInfo
+            //         .getStatements()
+            //         .stream()
+            //         .filter(stmt -> stmt instanceof ReturnStmt)
+            //         .findAny()
+            //         .get();
+            // rs.value.dispatch(stmtAnalyzer);
         }
 
         backend.emitJ(stmtAnalyzer.epilogue, format("[fn=%s] jump to epilogue", funcInfo.getFuncName()));
@@ -272,19 +276,16 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitJR(RA, "return to caller");
     }
 
-    static private class TransientsCount extends AbstractNodeAnalyzer< Integer >
-    {
+    static private class TransientsCount extends AbstractNodeAnalyzer<Integer> {
         @Override
-        public Integer analyze(BinaryExpr be)
-        {
+        public Integer analyze(BinaryExpr be) {
             Integer l = be.left.dispatch(this);
             Integer r = be.right.dispatch(this);
             return Math.max(l, 1 + r);
         }
 
         @Override
-        public Integer analyze(IfExpr ie)
-        {
+        public Integer analyze(IfExpr ie) {
             Integer condExpr = ie.condition.dispatch(this);
             Integer thenExpr = ie.thenExpr.dispatch(this);
             Integer elseExpr = ie.elseExpr.dispatch(this);
@@ -292,16 +293,15 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Integer analyze(CallExpr ce)
-        {
+        public Integer analyze(CallExpr ce) {
             int accMax = 0;
             for (int i = 1; i <= ce.args.size(); i++)
                 accMax = Math.max(accMax, ce.args.get(i - 1).dispatch(this) + ce.args.size() - i);
             return accMax;
         }
+
         @Override
-        public Integer analyze(MethodCallExpr mce)
-        {
+        public Integer analyze(MethodCallExpr mce) {
             int accMax = 0;
             for (int i = 1; i <= mce.args.size(); i++)
                 accMax = Math.max(accMax, mce.dispatch(this) + mce.args.size() - i);
@@ -309,11 +309,12 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Integer analyze(ReturnStmt rs) { return rs.value.dispatch(this); }
+        public Integer analyze(ReturnStmt rs) {
+            return rs.value.dispatch(this);
+        }
 
         @Override
-        public Integer analyze(ExprStmt es)
-        {
+        public Integer analyze(ExprStmt es) {
             return es.expr.dispatch(this);
         }
 
@@ -323,8 +324,145 @@ public class CodeGenImpl extends CodeGenBase {
         }
     }
 
+    @FunctionalInterface
+    protected interface Func4<A, B, C, D, E>
+    {
+        E apply(A a, B b, C c, D d);
+    }
+    @FunctionalInterface
+    protected interface Func5<A, B, C, D, E, F>
+    {
+        F apply(A a, B b, C c, D d, E e);
+    }
 
-    /** An analyzer that encapsulates code generation for statments. */
+    // set of functions that would be useful both inside and outside of StmtAnalyzer
+    static protected class AsmHelper
+    {
+        static public int initTemps(RiscVBackend backend, int MAX_TEMP_COUNT)
+        {
+            return clearTemps(backend, MAX_TEMP_COUNT);
+        }
+
+        static public int pushTempTopStackAligned(
+                RiscVBackend backend,
+                RiscVBackend.Register reg, int MAX_TEMP_COUNT, int curTemp,
+                String cmnt)
+        {
+            if (curTemp > MAX_TEMP_COUNT)
+                throw new IllegalArgumentException("temp space full");
+            backend.emitSW(reg, SP,
+                    (curTemp++ -1) * backend.getWordSize(),
+                    cmnt);
+            return curTemp;
+        }
+
+        static public int pushTemp(
+                RiscVBackend backend,
+                RiscVBackend.Register reg, int MAX_TEMP_COUNT, int curTemp,
+                // int fnArSz,
+                String cmnt)
+        {
+            // curTemp : [1...MAX_TEMP_COUNT+1]
+            if (curTemp > MAX_TEMP_COUNT)
+                throw new IllegalArgumentException("temp space full");
+            backend.emitSW(reg, SP,
+                    (MAX_TEMP_COUNT - curTemp++) * backend.getWordSize(),
+                    cmnt);
+            return curTemp;
+        }
+
+        static public void loadTempToReg(
+                RiscVBackend backend,
+                RiscVBackend.Register reg, int MAX_TEMP_COUNT, int temp,
+                String cmnt)
+        {
+            // curTemp : [1...MAX_TEMP_COUNT+1]
+            if (temp < 1)
+                throw new IllegalArgumentException("temp space empty");
+            backend.emitLW(reg, SP,
+                    (MAX_TEMP_COUNT - temp) * backend.getWordSize(),
+                    cmnt);
+        }
+
+        static public int clearTemps(RiscVBackend backend, int MAX_TEMP_COUNT)
+        {
+            return 1;
+        }
+
+        static public int popTempToReg(
+                RiscVBackend backend,
+                RiscVBackend.Register reg, int MAX_TEMP_COUNT, int curTemp,
+                // int fnArSz,
+                String cmnt)
+        {
+            if (curTemp <= 1)
+                throw new IllegalArgumentException("nothing to pop");
+            // backend.emitLW(reg, SP, (MAX_TEMP_COUNT - --curTemp) * backend.getWordSize(), cmnt);
+            backend.emitLW(reg, SP,
+                    (MAX_TEMP_COUNT - --curTemp) * backend.getWordSize(),
+                    // -(fnArSz - MAX_TEMP_COUNT * backend.getWordSize()) - (--curTemp) * backend.getWordSize(),
+                    cmnt);
+            return curTemp;
+        }
+
+        static public Void pushRegToLocalVar(
+                RiscVBackend backend,
+                FuncInfo fn, int varIdx,
+                RiscVBackend.Register fp, RiscVBackend.Register dest,
+                String cmt)
+        {
+            return _accessRegToVar(backend, fn, varIdx, fp, dest, cmt,
+                    (bke, r1, r2, offset, cmnt) -> {
+                        bke.emitSW(r1, r2, offset, cmnt);
+                        return null;
+                    });
+        }
+
+        static public Void loadLocalVarToReg(
+                RiscVBackend backend,
+                FuncInfo fn, int varIdx,
+                RiscVBackend.Register fp, RiscVBackend.Register dest,
+                String cmt)
+        {
+            return _accessRegToVar(backend, fn, varIdx, fp, dest, cmt,
+                    (bke, r1, r2, offset, cmnt) -> {
+                        bke.emitLW(r1, r2, offset, cmnt);
+                        return null;
+                    });
+        }
+
+        // varIdx could be -1 to indicate trying to load a static link
+        static protected Void _accessRegToVar(
+                RiscVBackend backend,
+                FuncInfo fn, int varIdx,
+                RiscVBackend.Register fp, RiscVBackend.Register dest,
+                String cmt,
+                Func5<RiscVBackend, RiscVBackend.Register, RiscVBackend.Register, Integer, String, Void> op
+        )
+        {
+            int maxParamIndex = fn.getParams().size() - 1;
+            int maxLocalIndex = fn.getLocals().size() + fn.getParams().size() + 2 - 1;
+            VarInfo vi = null;
+            int offsetFromFP;
+            if (varIdx <= maxParamIndex) // is param
+            {
+                offsetFromFP = maxParamIndex - varIdx;
+                if (varIdx == -1 && fn.getParentFuncInfo() == null)
+                    throw new IllegalArgumentException("trying to get static link but function not nested");
+                op.apply(backend, dest, fp, +offsetFromFP * backend.getWordSize(), cmt);
+            } else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
+            {
+                offsetFromFP = varIdx - fn.getParams().size();
+                op.apply(backend, dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
+            } else throw new IllegalArgumentException("should be unreachable");
+
+            return null;
+        }
+    }
+
+    /**
+     * An analyzer that encapsulates code generation for statments.
+     */
     private class StmtAnalyzer extends AbstractNodeAnalyzer<Void> {
         /*
          * The symbol table has all the info you need to determine
@@ -373,9 +511,9 @@ public class CodeGenImpl extends CodeGenBase {
          */
         private FuncInfo funcInfo;
 
-        // just here to make sure _pushToStack and _popOffStack calls are balanced.
-        private Stack<RiscVBackend.Register> regStack = new Stack<>();
-
+        private final int MAX_TEMPS;
+        private int curTemp;
+        private Stack<String> tempContent = new Stack<>();
         /**
          * An analyzer for the function described by FUNCINFO0, which is null
          * for the top level.
@@ -389,24 +527,27 @@ public class CodeGenImpl extends CodeGenBase {
                 sym = funcInfo.getSymbolTable();
             }
             epilogue = generateLocalLabel();
+
+            MAX_TEMPS = _getFnTempsCount(funcInfo0);
+            curTemp = AsmHelper.initTemps(backend, MAX_TEMPS);
         }
 
         @Override
-        public Void analyze(ReturnStmt stmt)
-        {
+        public Void analyze(ReturnStmt stmt) {
             // TODO: this assumes that an @f.size constant had been defined. It hasn't been (yet).
             // computes return value
-             stmt.value.dispatch(this);
-             backend.emitLW(RA, FP, -4, "Get return address");
-             backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
-             backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
-             backend.emitJR(RA, "Return to caller");
+            stmt.value.dispatch(this);
+            _emitSeparator("<<<epilogue", ".");
+            backend.emitLW(RA, FP, -4, "Get return address");
+            backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+            backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
+            backend.emitJR(RA, "Return to caller");
+            _emitSeparator("epilogue>>>", ".");
             return null;
         }
 
         @Override
-        public Void analyze(BinaryExpr be)
-        {
+        public Void analyze(BinaryExpr be) {
             Label evaluateSecondExpressionLocalLabel = generateLocalLabel();
             Label exitBinaryExprLocalLabel = generateLocalLabel();
 
@@ -431,8 +572,7 @@ public class CodeGenImpl extends CodeGenBase {
             be.right.dispatch(this);
             _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
 
-            switch (be.operator)
-            {
+            switch (be.operator) {
                 case "+":
                     backend.emitADD(A0, T1, A0, "+ two operands");
                     break;
@@ -487,10 +627,10 @@ public class CodeGenImpl extends CodeGenBase {
                     Label greaterOrEqualLocalLabel = generateLocalLabel();
                     Label exitLocalLabel3 = generateLocalLabel();
                     backend.emitBGE(T1, A0, greaterOrEqualLocalLabel, ">=: Compare if T1 >= A0");
-                    backend.emitLI(A0, 0 ,"T1 is NOT greater than A0, Set A0 to False (0)");
+                    backend.emitLI(A0, 0, "T1 is NOT greater than A0, Set A0 to False (0)");
                     backend.emitJ(exitLocalLabel3, "Jump to exit local label");
                     backend.emitLocalLabel(greaterOrEqualLocalLabel, null);
-                    backend.emitLI(A0, 1 ,"T1 is greater than A0, Set A0 to True (1)");
+                    backend.emitLI(A0, 1, "T1 is greater than A0, Set A0 to True (1)");
                     backend.emitLocalLabel(exitLocalLabel3, "Exit local label");
                     break;
                 case "<":
@@ -502,10 +642,10 @@ public class CodeGenImpl extends CodeGenBase {
                     Label lessOrEqualLocalLabel = generateLocalLabel();
                     Label exitLocalLabel4 = generateLocalLabel();
                     backend.emitBGE(A0, T1, lessOrEqualLocalLabel, "<=: Compare if T1 <= A0");
-                    backend.emitLI(A0, 0 ,"A0 is NOT greater than T1, Set A0 to False (0)");
+                    backend.emitLI(A0, 0, "A0 is NOT greater than T1, Set A0 to False (0)");
                     backend.emitJ(exitLocalLabel4, "Jump to exit local label");
                     backend.emitLocalLabel(lessOrEqualLocalLabel, "Less than or equal to local label");
-                    backend.emitLI(A0, 1 ,"A0 is greater than T1, Set A0 to True (1)");
+                    backend.emitLI(A0, 1, "A0 is greater than T1, Set A0 to True (1)");
                     backend.emitLocalLabel(exitLocalLabel4, "Exit local label");
                     break;
                 case "or":
@@ -523,39 +663,33 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(IntegerLiteral intLit)
-        {
+        public Void analyze(IntegerLiteral intLit) {
             backend.emitLI(A0, intLit.value, format("Load integer literal: %d", intLit.value));
+            // wrapInteger();
             return null;
         }
 
-        @Override public Void analyze(StringLiteral strLit)
-        {
+        @Override
+        public Void analyze(StringLiteral strLit) {
             Label lbl = constants.getStrConstant(strLit.value);
             backend.emitLA(A0, lbl, format("Load string literal: \"%s\"", strLit.value));
             return null;
         }
 
-        protected Integer _pushRegToStack(RiscVBackend.Register reg, String cmt)
-        {
-            regStack.push(reg);
+        protected Integer _pushRegToStack(RiscVBackend.Register reg, String cmt) {
             backend.emitADDI(SP, SP, -4, cmt);
             backend.emitSW(reg, SP, 0, format("push reg %s to stack", reg.toString()));
             return null;
         }
 
-        protected Integer _popStackToReg(RiscVBackend.Register reg, String cmt)
-        {
-            if (regStack.isEmpty())
-                throw new RuntimeException("Unbalanced calls to _pushRegToStack and _popRegOffStack");
+        protected Integer _popStackToReg(RiscVBackend.Register reg, String cmt) {
             backend.emitLW(reg, SP, 0, format("pop stack to reg %s", reg.toString()));
             backend.emitADDI(SP, SP, +4, cmt);
             return null;
         }
 
         @Override
-        public Void analyze(BooleanLiteral bl)
-        {
+        public Void analyze(BooleanLiteral bl) {
             //Store boolean in A0 reg?
             //Booleans - True: 1 and False: 0
             backend.emitLI(A0, bl.value ? 1 : 0, format("Load boolean immediate \"%b\" into A0", bl.value));
@@ -568,8 +702,7 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-        public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg)
-        {
+        public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg) {
             int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
             backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 4,
                     format("[fn=%s] load local VAR `%s: %s` TO reg `%s`",
@@ -577,8 +710,7 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-        public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi)
-        {
+        public Void pushRegToLocalVar(RiscVBackend.Register reg, VarInfo svi) {
             int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
             backend.emitSW(reg, FP,
                     -varIdx * backend.getWordSize() - 4,
@@ -589,34 +721,16 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
-        // not tested thoroughly.
-        // varIdx could be -1 to indicate trying to load a static link
         public Void loadLocalVarToReg(
-                FuncInfo fn, int varIdx, RiscVBackend.Register fp, RiscVBackend.Register dest, String cmt)
+                RiscVBackend backend,
+                FuncInfo fn, int varIdx,
+                RiscVBackend.Register fp, RiscVBackend.Register dest,
+                String cmt)
         {
-            int maxParamIndex = fn.getParams().size() - 1;
-            int maxLocalIndex = fn.getLocals().size() + fn.getParams().size() + 2 -1;
-            VarInfo vi = null;
-            int offsetFromFP;
-            if (varIdx <= maxParamIndex) // is param
-            {
-                offsetFromFP = maxParamIndex - varIdx;
-                if (varIdx == -1 && fn.getParentFuncInfo() == null)
-                    throw new IllegalArgumentException("trying to get static link but function not nested");
-                backend.emitLW(dest, fp, +offsetFromFP * backend.getWordSize(), cmt);
-            }
-            else if (maxParamIndex + 2 < varIdx && varIdx <= maxLocalIndex) // is local
-            {
-                offsetFromFP = varIdx - funcInfo.getParams().size();
-                backend.emitLW(dest, fp, -offsetFromFP * backend.getWordSize() - 4, cmt);
-            }
-            else throw new IllegalArgumentException("should be unreachable");
-
-            return null;
+            return AsmHelper.loadLocalVarToReg(backend, fn, varIdx, fp, dest, cmt);
         }
 
-        public Void loadLocalParamToReg(VarInfo svi, RiscVBackend.Register reg)
-        {
+        public Void loadLocalParamToReg(VarInfo svi, RiscVBackend.Register reg) {
             int varIdx = funcInfo.getVarIndex(svi.getVarName());
             backend.emitLW(reg, FP, +(funcInfo.getParams().size() - 1 - varIdx) * backend.getWordSize(),
                     format("[fn=%s] load local PARAM `%s: %s` to reg `%s`",
@@ -625,13 +739,10 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(Identifier id)
-        {
-            if (funcInfo != null)
-            {
+        public Void analyze(Identifier id) {
+            if (funcInfo != null) {
                 if (funcInfo.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
-                        || funcInfo.getParams().contains(id.name))
-                {
+                        || funcInfo.getParams().contains(id.name)) {
                     int index = funcInfo.getVarIndex(id.name);
                     VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
                     if (index < funcInfo.getParams().size()) {
@@ -639,24 +750,27 @@ public class CodeGenImpl extends CodeGenBase {
                     } else {
                         return loadLocalVarToReg(vi, A0);
                     }
-                }
-                else // id must be nonlocal or declared somewhere in a previous scope
+                } else // id must be nonlocal or declared somewhere in a previous scope
                 {
                     //Walk up the static links to find the correct scope that hosts the desired identifier
                     FuncInfo actualOuterScope = funcInfo;
                     backend.emitMV(T0, FP, format("Configuration for getting static link of %s", actualOuterScope.getFuncName()));
-                    while (actualOuterScope != null)
-                    {
+                    while (actualOuterScope != null) {
                         if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)) ||
-                                actualOuterScope.getParams().contains(id.name))
-                        {
+                                actualOuterScope.getParams().contains(id.name)) {
                             // t0 should now have the fp of the static-scope's AR
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
 
 
                             if (varIdx < actualOuterScope.getParams().size()) {
-                                return loadLocalVarToReg(actualOuterScope, varIdx, T0, A0, "Load param " + svi.getVarName() + " into A0");
+                                return AsmHelper.loadLocalVarToReg(
+                                        backend,
+                                        actualOuterScope,
+                                        varIdx,
+                                        T0,
+                                        A0,
+                                        "Load param " + svi.getVarName() + " into A0");
                             } else {
                                 int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
                                 backend.emitLW(A0, T0, offset,
@@ -668,7 +782,9 @@ public class CodeGenImpl extends CodeGenBase {
                             }
 
                             if (varIdx < actualOuterScope.getParams().size()) {
-                                return loadLocalVarToReg(actualOuterScope, varIdx, T0, A0, "Load param " + svi.getVarName() + " into A0");
+                                return AsmHelper.loadLocalVarToReg(
+                                        backend,
+                                        actualOuterScope, varIdx, T0, A0, "Load param " + svi.getVarName() + " into A0");
                             } else {
                                 int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
                                 backend.emitLW(A0, T0, offset,
@@ -679,13 +795,12 @@ public class CodeGenImpl extends CodeGenBase {
                                                 "A0"));
                             }
                             break;
-                        }
-                        else
-                        {
+                        } else {
                             String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
 
                             if (actualOuterScope.getParentFuncInfo() != null) {
-                                loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                                AsmHelper.loadLocalVarToReg(backend,
+                                        actualOuterScope, -1, T0, T0,
                                         format("Load static link from %s to %s",
                                                 actualOuterScope.getFuncName(),
                                                 parentFuncInfoName));
@@ -700,8 +815,7 @@ public class CodeGenImpl extends CodeGenBase {
             String idName = id.name;
             SymbolInfo idSymbolInfo = sym.get(idName);
 
-            if (idSymbolInfo instanceof GlobalVarInfo)
-            {
+            if (idSymbolInfo instanceof GlobalVarInfo) {
                 backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
             }
 
@@ -728,17 +842,15 @@ public class CodeGenImpl extends CodeGenBase {
             int fnArSz = _getFnArSize(functionInfo);
 
             // If the callee is statically nested, first push the `static link`
-            if (functionInfo.getParentFuncInfo() != null)
-            {
+            if (functionInfo.getParentFuncInfo() != null) {
                 // Retrieve a static link to the static outer scope.
                 FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
                 FuncInfo actualOuterScope = funcInfo;
                 backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
-                while (!actualOuterScope.equals(staticOuterScope))
-                {
+                while (!actualOuterScope.equals(staticOuterScope)) {
                     // deference static link
                     // backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
-                    loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                    AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
                             format("Get static link from %s to %s",
                                     actualOuterScope.getFuncName(),
                                     actualOuterScope.getParentFuncInfo().getFuncName()));
@@ -749,8 +861,7 @@ public class CodeGenImpl extends CodeGenBase {
             }
 
             // for (int i = ce.args.size() - 1; i >= 0; i--)
-            for (int i = 0; i < ce.args.size(); i++)
-            {
+            for (int i = 0; i < ce.args.size(); i++) {
                 Expr argExpr = ce.args.get(i);
                 String paramName = functionParams.get(i);
                 StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
@@ -760,26 +871,22 @@ public class CodeGenImpl extends CodeGenBase {
 
                 //Handle "wrapping" integers and booleans
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.INT_TYPE))
-                {
+                        && argExpr.getInferredType().equals(Type.INT_TYPE)) {
                     // Call Int Wrapping Code Emitter
                     wrapInteger();
                 }
 
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
-                {
+                        && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
                     // Call Bool Wrapping Code Emitter: Create Bool object
                     wrapBoolean();
                 }
 
-                // backend.emitADDI(SP, SP, -1 * backend.getWordSize(), "Move SP to fit arg");
-                // backend.emitSW(A0, SP, 0, "Store AO to newly allocated arg space");
                 _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
             }
 
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
-            backend.emitADDI(SP, FP, -fnArSz - 4, "Set SP to top of stack");
+            backend.emitADDI(SP, FP, -fnArSz, "Set SP to top of stack");
             return null;
         }
 
@@ -792,14 +899,14 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitBEQZ(A0, falseElseBranch, "If A0 == 0, jump to falseElseBranch");
 
             //TRUE Branch
-            for (Stmt thenStmt: ifStmt.thenBody) {
+            for (Stmt thenStmt : ifStmt.thenBody) {
                 thenStmt.dispatch(this);
             }
             backend.emitJAL(finishIfStmtBranch, null);
 
             //FALSE Branch
             backend.emitLocalLabel(falseElseBranch, null);
-            for (Stmt elseStmt: ifStmt.elseBody) {
+            for (Stmt elseStmt : ifStmt.elseBody) {
                 elseStmt.dispatch(this);
             }
 
@@ -808,14 +915,37 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(AssignStmt as)
-        {
+        public Void analyze(AssignStmt as) {
             as.value.dispatch(this);
+            int rhs = pushTemp(A0, "assignt-stmt's value", "push RHS to temp-stack");
 
-            for (Expr targetExpr: as.targets)
+            for (Expr targetExpr : as.targets)
             {
-                String targetExprName = ((Identifier) targetExpr).name;
-                SymbolInfo targetExprSymbolInfo = sym.get(targetExprName);
+                // String targetExprName = ((Identifier) targetExpr).name;
+                // SymbolInfo targetExprSymbolInfo = sym.get(targetExprName);
+                String targetExprName = null;
+                SymbolInfo targetExprSymbolInfo = null;
+                if (targetExpr instanceof Identifier)
+                {
+                    targetExprName = ((Identifier) targetExpr).name;
+                    targetExprSymbolInfo = sym.get(targetExprName);
+                }
+                else if (targetExpr instanceof IndexExpr)
+                {
+                    _emitSeparator("assign-to-index-expr", "%");
+
+                    addressIndexExpr((IndexExpr) targetExpr, ie -> {
+                        // A1 = list_ptr; A0 = ptr-to-index-elem; T0 = attr __len__;
+                        if ( targetExpr.getInferredType().equals(Type.INT_TYPE)
+                                || (targetExpr.getInferredType().equals(Type.BOOL_TYPE)) )
+                        // no boxing
+                        {
+                            loadTempToReg(T1, rhs, "load rhs into A0");
+                            bke.emitSW(T1, A0, 0, "store rhs to list");
+                        }
+                    });
+                    continue;
+                }
 
                 //box if value is of type int or bool and target type is object
                 if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
@@ -825,13 +955,12 @@ public class CodeGenImpl extends CodeGenBase {
                 }
 
                 if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
-                        as.value.getInferredType().equals(Type.BOOL_TYPE))
-                {
+                        as.value.getInferredType().equals(Type.BOOL_TYPE)) {
                     wrapBoolean();
                 }
 
 
-                if (targetExprSymbolInfo instanceof  GlobalVarInfo) {
+                if (targetExprSymbolInfo instanceof GlobalVarInfo) {
                     GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
 
                     backend.emitSW(A0, globalTypedVarSymbolInfo.getLabel(), T1, "Store A0 into global var " + globalTypedVarSymbolInfo.getVarName());
@@ -857,7 +986,7 @@ public class CodeGenImpl extends CodeGenBase {
                         } else {
                             String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
                             if (actualOuterScope.getParentFuncInfo() != null) {
-                                loadLocalVarToReg(actualOuterScope, -1, T0, T0,
+                                AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
                                         format("Load static link from %s to %s",
                                                 actualOuterScope.getFuncName(),
                                                 parentFuncInfoName));
@@ -868,6 +997,7 @@ public class CodeGenImpl extends CodeGenBase {
                 }
             }
 
+            popNTemps(1, "pop assign-stmt's value");
             return null;
         }
 
@@ -885,7 +1015,7 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitJ(exitWhileLocalLabel, "Jump to bottom of while loop to exit");
             //While Loop Body
             backend.emitLocalLabel(whileTrueBodyLabel, "While loop body");
-            for (Stmt bodyStmt: ws.body) {
+            for (Stmt bodyStmt : ws.body) {
                 bodyStmt.dispatch(this);
             }
             backend.emitJ(whileTopLocalLabel, "Go back to top of while loop");
@@ -902,43 +1032,274 @@ public class CodeGenImpl extends CodeGenBase {
         private void wrapBoolean() {
             backend.emitInsn("jal wrapBoolean", null);
         }
+
+
+        // TODO: delete this
+        // public int initTemps()
+        // {
+        //     tempContent.clear();
+        //     curTemp = AsmHelper.initTemps(backend, MAX_TEMPS);
+        //     return curTemp;
+        // }
+
+        public int pushTemp(RiscVBackend.Register reg, String content, String cmnt)
+        {
+            tempContent.push(content);
+            int oldcurtemp = curTemp;
+            curTemp = AsmHelper.pushTemp(backend, reg, MAX_TEMPS, curTemp, //_getFnArSize(funcInfo),
+                    format("[push-temp `%s`] ", content) + cmnt);
+            return oldcurtemp;
+        }
+
+        public void loadTempToReg(RiscVBackend.Register reg, int temp, String cmnt)
+        {
+            String content = tempContent.get(temp - 1);
+            AsmHelper.loadTempToReg(backend, reg, MAX_TEMPS, temp,
+                    format("[load-temp `%s`] ", content) + cmnt);
+        }
+
+        public int popNTemps(int N, String cmnt)
+        {
+            while (--N >= 1)
+            {
+                curTemp--;
+                tempContent.pop();
+            }
+            if (curTemp < 1) throw new IllegalArgumentException("pop too many");
+            return curTemp;
+        }
+
+        public int pushTempTopStackAligned(RiscVBackend.Register reg, String content, String cmnt)
+        {
+            tempContent.push(content);
+            int oldcurtemp = curTemp;
+            curTemp = AsmHelper.pushTempTopStackAligned(backend, reg, MAX_TEMPS, oldcurtemp, //_getFnArSize(funcInfo),
+                    format("[push-temp-top-aligned `%s`] ", content) + cmnt);
+            return oldcurtemp;
+        }
+
+        public int popTempToReg(RiscVBackend.Register reg, String cmnt)
+        {
+            String cnt = tempContent.pop();
+            int oldcurtemp = curTemp;
+            curTemp = AsmHelper.popTempToReg(backend, reg, MAX_TEMPS, oldcurtemp, //_getFnArSize(funcInfo),
+                    format("[pop-temp `%s`] ", cnt) + cmnt);
+            return oldcurtemp;
+        }
+
+        // TODO: consider deleting this
+        // public int clearTemps()
+        // {
+        //     tempContent.clear();
+        //     return initTemps();
+        // }
+
+        public Void analyze(ListExpr le)
+        {
+            bke.emitLI(A0, le.elements.size(), "get list's size");
+            pushTempTopStackAligned(A0, "size", "store size to stack");
+            for (int i = le.elements.size() - 1; i >= 0; i--)
+            {
+                Expr e = le.elements.get(i);
+                e.dispatch(this);
+                pushTempTopStackAligned(A0, format("%d-th elem", i), format("push element %d-th to temp-stack", i));
+            }
+            bke.emitJAL(consListLabel, "construct list");
+            popNTemps(1 + le.elements.size(), "Pop temporaries");
+            return null;
+        }
+
+        // within opAddr, the following are true
+        // A1 = list_ptr; A0 = ptr-to-indexed-elem; T0 = attr __len__;
+        protected Void addressIndexExpr(IndexExpr ie, Consumer<IndexExpr> opAddr)
+        {
+            Label notNone = generateLocalLabel();
+            Label withinBound = generateLocalLabel();
+
+            assert(getAttrOffset(strClass, "__len__") == getAttrOffset(listClass, "__len__"));
+            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "Load attribute __len__");
+
+            // Get list and store on stack
+            ie.list.dispatch(this); // A0 = list
+            pushTemp(A0,
+                    "list",
+                    format("push list %s onto temp", ie.list.getInferredType()));
+
+            ie.index.dispatch(this); // A0 = index
+            // curTemp = AsmHelper.popTempToReg(bke, A1, MAX_TEMPS, curTemp, "retrieve list into A1");
+            popTempToReg(A1, "retrieve list into A1");
+
+            bke.emitBNEZ(A1, notNone, "Ensure not none");
+            bke.emitJ(errorNone, "Goes to none handler");
+
+            // not_none:
+            bke.emitLocalLabel(notNone, "Not none");
+            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "get attribute __len__");
+            bke.emitBLTU(A0, T0, withinBound, "Index within bound");
+            bke.emitJ(errorOob, "Go to OOB error handler");
+
+            // within_bound:
+            bke.emitLocalLabel(withinBound, "Index within bound");
+            bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
+            bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
+            bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
+
+            // A1 = list_ptr; A0 = ptr-to-first-elem; T0 = attr __len__;
+            // invoke op
+            opAddr.accept(ie);
+
+            popNTemps(1, "Pop temp");
+
+            return null;
+        }
+
+        public Void analyze(IndexExpr e)
+        {
+            return addressIndexExpr(e, ie -> {
+                ValueType ty = ie.list.getInferredType().elementType();
+                if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
+                // these types are unboxed so load value directly
+                {
+                    bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
+                }
+                else
+                {
+                    assert(false);
+                }
+            }) ;
+        }
+
+        public Void __analyze(IndexExpr ie)
+        {
+            Label notNone = generateLocalLabel();
+            Label withinBound = generateLocalLabel();
+
+            assert(getAttrOffset(strClass, "__len__") == getAttrOffset(listClass, "__len__"));
+            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "Load attribute __len__");
+
+            // Get list and store on stack
+            ie.list.dispatch(this); // A0 = list
+            pushTemp(A0,
+                    "list",
+                    format("push list %s onto temp", ie.list.getInferredType()));
+
+            ie.index.dispatch(this); // A0 = index
+            // curTemp = AsmHelper.popTempToReg(bke, A1, MAX_TEMPS, curTemp, "retrieve list into A1");
+            popTempToReg(A1, "retrieve list into A1");
+
+            bke.emitBNEZ(A1, notNone, "Ensure not none");
+            bke.emitJ(errorNone, "Goes to none handler");
+
+            // not_none:
+            // A1 = list_ptr; A0 = index
+            bke.emitLocalLabel(notNone, "Not none");
+            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "get attribute __len__");
+            bke.emitBLTU(A0, T0, withinBound, "Index within bound");
+            bke.emitJ(errorOob, "Go to OOB error handler");
+
+            // within_bound:
+            bke.emitLocalLabel(withinBound, "Index within bound");
+            bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
+            bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
+            bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
+
+            ValueType ty = ie.list.getInferredType().elementType();
+            if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
+                // these types are unboxed so load value directly
+            {
+                bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
+            }
+            else
+            {
+                assert(false);
+            }
+
+            // AsmHelper.clearTemps(bke, MAX_TEMPS, curTemp);
+            return null;
+        }
     }
 
     /**
      * Emits custom code in the CODE segment.
-     *
+     * <p>
      * This method is called after emitting the top level and the
      * function bodies for each function.
-     *
+     * <p>
      * You can use this method to emit anything you want outside of the
      * top level or functions, e.g. custom routines that you may want to
      * call from within your code to do common tasks. This is not strictly
      * needed. You might not modify this at all and still complete
      * the assignment.
-     *
+     * <p>
      * To start you off, here is an implementation of three routines that
      * will be commonly needed from within the code you will generate
      * for statements.
-     *
+     * <p>
      * The routines are error handlers for operations on None, index out
      * of bounds, and division by zero. They never return to their caller.
      * Just jump to one of these routines to throw an error and
      * exit the program. For example, to throw an OOB error:
-     *   backend.emitJ(errorOob, "Go to out-of-bounds error and abort");
-     *
+     * backend.emitJ(errorOob, "Go to out-of-bounds error and abort");
      */
     protected void emitCustomCode() {
-        emitErrorFunc(errorNone, "Operation on None");
-        emitErrorFunc(errorDiv, "Division by zero");
-        emitErrorFunc(errorOob, "Index out of bounds");
+        emitErrorFunc(errorNone, "Operation on None", ERROR_NONE);
+        emitErrorFunc(errorDiv, "Division by zero", ERROR_DIV_ZERO);
+        emitErrorFunc(errorOob, "Index out of bounds", ERROR_OOB);
         emitWrappedInt();
         emitWrappedBoolean();
+        emitConsList();
+    }
+
+    private static final int listHeaderWords = 4; // last word is __len__
+    private static final int D__elts__ = 16;
+
+    // a list constructor
+    protected void emitConsList()
+    {
+        bke.emitGlobalLabel(consListLabel);
+        Label done = new Label("conslist_done");
+        bke.emitADDI(SP, SP, -8, null);
+        bke.emitSW(RA, SP, 4, null);
+        bke.emitSW(FP, SP, 0, null);
+        bke.emitADDI(FP, SP, 8, "fp is old sp");
+
+        bke.emitLW(A1, FP, 0, "Get list size");
+        bke.emitLA(A0, listClass.getPrototypeLabel(), "Get list prototype for alloc2");
+        bke.emitBEQZ(A1, done, "If list empty, then we done.");
+        // else, lets allocate space for list on the heap
+        bke.emitADDI(A1, A1, listHeaderWords, "Allocate sz + 4 to store elements and headers");
+        bke.emitJAL(objectAllocResizeLabel, "Allocate space for list on heap");
+
+        // A0 = heap_ptr; T0 = size
+        bke.emitLW(T0, FP, 0, "t0 = len");
+        bke.emitSW(T0, A0, getAttrOffset(listClass, "__len__"), "store length attr to list on heap");
+        bke.emitSLLI(T1, T0, 2, "t1 = size (in bytes) of list in memory");
+        bke.emitADD(T1, T1, FP, "t1 now points to start of stack-list");
+        bke.emitADDI(T2, A0, D__elts__, "t2 points to first array element");
+        // t1 = stack-arr; t2 = heap-arr;
+
+        Label loop = new Label("conslist_1");
+        bke.emitLocalLabel(loop, "copying contents from stack-list to heap-list");
+        bke.emitLW(T3, T1, 0, "t3 = stack-arr[0]");
+        bke.emitSW(T3, T2, 0, "heap-arr[0] = t3");
+        bke.emitADDI(T1, T1, -4, "stack-arr -= 4");
+        bke.emitADDI(T2, T2, 4, "heap-arr += 4");
+        bke.emitADDI(T0, T0, -1, "size -= 1");
+        bke.emitBNEZ(T0, loop, "if there are still element to be copy, keep copying.");
+
+        // conslist_done:
+        bke.emitLocalLabel(done, "just finishing up");
+        bke.emitLW(RA, FP, -4, null);
+        bke.emitLW(FP, FP, -8, null);
+        bke.emitADDI(SP, SP, 8, null);
+        bke.emitJR(RA, null);
     }
 
     /** Emit an error routine labeled ERRLABEL that aborts with message MSG. */
-    private void emitErrorFunc(Label errLabel, String msg) {
+    private void emitErrorFunc(Label errLabel, String msg, int errc)
+    {
         backend.emitGlobalLabel(errLabel);
-        backend.emitLI(A0, ERROR_NONE, "Exit code for: " + msg);
+        backend.emitLI(A0, errc, "Exit code for: " + msg);
         backend.emitLA(A1, constants.getStrConstant(msg),
                        "Load error message as str");
         backend.emitADDI(A1, A1, getAttrOffset(strClass, "__str__"),
