@@ -983,6 +983,10 @@ public class CodeGenImpl extends CodeGenBase {
         public Void analyze(CallExpr ce)
         {
             String functionName = ce.function.name;
+            // TODO:: add logic for method invocation here.
+            if (!(sym.get(functionName) instanceof FuncInfo))
+                return null;
+
             FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
             List<String> functionParams = functionInfo.getParams();
             // int fnArSz = _getFnArSize(funcInfo);
@@ -1352,16 +1356,18 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void analyze(IndexExpr e)
         {
-            return addressIndexExpr(e, ie -> {
-                ValueType ty = ie.list.getInferredType().elementType();
-                if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
-                // these types are unboxed so load value directly
+            return addressIndexExpr(e, ie ->
+            {
+                if (e.list.getInferredType().isListType())
                 {
-                    bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
-                }
-                else
-                {
-                    assert(false);
+                    ValueType ty = ie.list.getInferredType().elementType();
+                    if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
+                    // these types are unboxed so load value directly
+                    {
+                        bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
+                    } else {
+                        assert (false);
+                    }
                 }
             }) ;
         }
