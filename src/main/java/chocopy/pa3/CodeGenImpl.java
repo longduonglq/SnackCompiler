@@ -102,10 +102,6 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitEcall(null);
     }
 
-    protected String _fnSizeLabel(FuncInfo fi) {
-        return format("@%s.size", fi.getBaseName());
-    }
-
     protected void _emitSeparator(String title, String r) {
         r = r == null ? "-" : r;
         final int L = 50;
@@ -113,101 +109,11 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitInsn(format("#%s( %s )%s", sep, title, sep), "");
     }
 
-    protected void _rtPrintChar(char c) {
-        if (_EMIT_RT_TRACE) {
-            bke.emitADDI(SP, SP, -8, "[debug] reserve space for a0, a1");
-            bke.emitSW(A0, SP, +4, "[debug] store old a0");
-            bke.emitSW(A1, SP, +0, "[debug] store old a1");
-
-            bke.emitLI(A1, (int) c, "[debug] load character to a1");
-            bke.emitLI(A0, PRINT_CHAR_ECALL, "[debug] load character to a1");
-            bke.emitEcall("call print_char");
-
-            bke.emitLW(A0, SP, +4, "[debug] restore old a0");
-            bke.emitLW(A1, SP, +0, "[debug] restore old a1");
-            bke.emitADDI(SP, SP, +8, "[debug] restore sp pointer");
-        }
-    }
-
-    protected void _rtPrintInt(RiscVBackend.Register reg) {
-        if (_EMIT_RT_TRACE) {
-            bke.emitADDI(SP, SP, -8, "[debug] reserve space for a0, a1");
-            bke.emitSW(A0, SP, +4, "[debug] store old a0");
-            bke.emitSW(A1, SP, +0, "[debug] store old a1");
-
-            bke.emitMV(A1, reg, "[debug] load int to a1");
-            bke.emitLI(A0, PRINT_INT_ECALL, "[debug] load character to a1");
-            bke.emitEcall("call print_int");
-
-            bke.emitLW(A0, SP, +4, "[debug] restore old a0");
-            bke.emitLW(A1, SP, +0, "[debug] restore old a1");
-            bke.emitADDI(SP, SP, +8, "[debug] restore sp pointer");
-        }
-    }
-
-    // runtimePrint
-    protected void __rtPrint(String fmt, Object... args) {
-        if (_EMIT_RT_TRACE) {
-            Label str = constants.getStrConstant(format(fmt, args));
-
-            // callee
-            bke.emitADDI(SP, SP, -8, "[debug] reserve space (old a0, old a1) for stack frame");
-            bke.emitSW(A0, SP, +4, "[debug] saves old a0 value");
-            bke.emitSW(A1, SP, +0, "[debug] saves old a1 value");
-
-            bke.emitLA(A0, str, "[debug] load str addr to a0");
-            bke.emitADDI(A1, A0, 16, "[debug] load addr of attr __str__");
-            bke.emitLI(A0, PRINT_STRING_ECALL, "[debug] load ecall for print_string");
-            bke.emitEcall("[debug] ecall print_string");
-
-            bke.emitLW(A0, SP, +4, "[debug] restore old a0 value");
-            bke.emitLW(A1, SP, +0, "[debug] restore old a1 value");
-            bke.emitADDI(SP, SP, +8, "[debug] restore sp ptr");
-        }
-    }
-
-    protected void _rtPrint(String fmt, Object... args) {
-        if (_EMIT_RT_TRACE) {
-            __rtPrint("[TRACE]: " + fmt, args);
-        }
-    }
-
-    protected void _rtPrintRegs(RiscVBackend.Register... regs) {
-        if (_EMIT_RT_TRACE) {
-            for (RiscVBackend.Register reg : regs) {
-                _rtPrint("REG[%s] = ", reg.toString());
-                _rtPrintInt(reg);
-                _rtPrintChar('\n');
-            }
-        }
-    }
-
-    // prints memory region from `ptr` to `ptr + size`, unit of `size` is `word`
-    protected void _rtPrintMem(RiscVBackend.Register ptr, int size) {
-        if (_EMIT_RT_TRACE) {
-            Label regValueDumpSite = constants.getIntConstant(1984);
-            _rtPrint(format("&> MEM region size %d words starting at: ", size));
-            _rtPrintRegs(ptr);
-            bke.emitADDI(SP, SP, -4, "[debug] space for: old a0 value");
-            bke.emitSW(A0, SP, +0, "[debug] saves old a0 value");
-            // unroll loop for simple codegen. could be improved. this will generate large assembly for large `size`.
-            for (int i = 0; i < size; i++) {
-                _rtPrint("\tMEM[");
-                bke.emitMV(A0, ptr, format("[debug] move reg %s to a0", ptr));
-                bke.emitADDI(A0, A0, i * 4, format("[debug] get addr of the %d-th word", i));
-                _rtPrintInt(A0);
-                __rtPrint("]:= ");
-
-                bke.emitLW(A0, A0, 0, format("[debug] get value of the %d-th word", i));
-                _rtPrintInt(A0);
-                _rtPrintChar('\n');
-                bke.emitLW(A0, SP, +0, "[debug] restore old a0 value");
-            }
-            bke.emitLW(A0, SP, +0, "[debug] restore old a0 value");
-            bke.emitADDI(SP, SP, +4, "[debug] restore sp ptr");
-        }
-    }
-
+    /**
+     * Ideally, we should actually calculate the number of temporaries needed but for now,
+     * let's take advantage of the fact that most functions in test suite doesn't need a lot of
+     * tmps for each function call.
+     * */
     protected int _getFnTempsCount(FuncInfo fni)
     {
         // TransientsCount tc = new TransientsCount();
@@ -344,6 +250,45 @@ public class CodeGenImpl extends CodeGenBase {
     }
 
     // set of functions that would be useful both inside and outside of StmtAnalyzer
+    /**
+     * For the following functions, please refer to the stack diagram in chocopy_impl_guide.
+     * Basically, I assumed the following layout for a function AR:
+     *          1. temporaries          <-- SP
+     *          2. locals
+     *          3. control link
+     *          4. return addr          <-- FP
+     *
+     *  Instead of generating code to adjust SP each time a temporary is added,
+     *  we (as the compiler) simply remember which temporary locations (in the fixed-sized
+     *      memory region reserved for temporaries) had been occupied.
+     *  More specifically, we remember this information by keep track of `curTemp`, which points to
+     *      the offset (counted from the last locals) of the available space for a new temporary.
+     *  `curTemp` ranges from [1...MAX_TEMP_COUNT]
+     *
+     *  Example:: When `curTemp` is one, there are no temporaries.
+     *
+     *  Functions in AsmHelper are meant to abstract away all of this.
+     *  There are examples of how to use these functions in the code.
+     *  Note that since AsmHelper's function are stateless, we need to update the states manually
+     *      (For example: look at part of the code looking like this `curTemp = AsmHelper.fn(...)` to see what i mean)
+     *
+     *  @@@ If you happen to be working in StmtAnalyzer, you might want to use the wrapper for these
+     *      methods in StmtAnalyzer for ease.
+     *
+     *
+     * @@@ -- Regarding shrinkStack, inflateStack operation ---
+     * Recall that the top of the stack are temporaries. Sometimes, we'd like to invoke a callee
+     *      whose arguments have been put in the caller's temporaries. Since the callee always
+     *      looks for its argument by dereferencing a positive offset from FP, we simply adjust SP
+     *      (shrink the top of our stack/shrink our AR frame) such that when the callee is invoked, it will
+     *      find its locals at a positive offset from FP (which happens to be where the caller put the args
+     *      in the temporaries section).
+     *
+     *
+     * There are functions to pushTemporary and popTemporary. pushTemporary returns a `token`, ie a number
+     *  that sort of references the location of pushed temporary on the stack. This way, you can retrieve
+     *  the temporary (without popping it) by calling loadTemp...()
+     * */
     static protected class AsmHelper
     {
         static public int initTemps(RiscVBackend backend, int MAX_TEMP_COUNT)
