@@ -1,11 +1,10 @@
 package chocopy.pa3;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Stack;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.AbstractMap.SimpleEntry;
 
 import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
@@ -60,6 +59,8 @@ public class CodeGenImpl extends CodeGenBase {
     private final boolean _EMIT_RT_TRACE = true;
     private final Label consListLabel = new Label("conslist");
     private final Label concatListLabel = new Label("concat");
+    private final Label createCharTable = new Label("createCharTable");
+    private final Label charTable = new Label("charTable");
 
     protected final RiscVBackend bke;
 
@@ -75,16 +76,26 @@ public class CodeGenImpl extends CodeGenBase {
      *
      * @param statements top level statements
      */
-    protected void emitTopLevel(List<Stmt> statements) {
+    protected void emitTopLevel(List<Stmt> statements)
+    {
         StmtAnalyzer stmtAnalyzer = new StmtAnalyzer(null);
-        backend.emitADDI(SP, SP, -2 * backend.getWordSize(),
+        int mainArSz = _getFnArSize(
+                new FuncInfo(
+                        "main", 0,
+                        Type.NONE_TYPE, null, null, null));
+        backend.emitADDI(SP, SP, -mainArSz * backend.getWordSize(),
                 "Saved FP and saved RA (unused at top level).");
+        backend.emitSW(RA, SP, mainArSz - 4, format("[fn=%s] Save return address.", "main"));
+        backend.emitSW(FP, SP, mainArSz - 8, format("[fn=%s] Save control link.", "main"));
         backend.emitSW(ZERO, SP, 0, "Top saved FP is 0.");
         backend.emitSW(ZERO, SP, 4, "Top saved RA is 0.");
-        backend.emitADDI(FP, SP, 2 * backend.getWordSize(),
+        backend.emitADDI(FP, SP, mainArSz * backend.getWordSize(),
                 "Set FP to previous SP.");
 
-        for (Stmt stmt : statements) {
+        backend.emitJAL(createCharTable, "create one-character string table");
+
+        for (Stmt stmt : statements)
+        {
             stmt.dispatch(stmtAnalyzer);
         }
         backend.emitLI(A0, EXIT_ECALL, "Code for ecall: exit");
@@ -206,7 +217,7 @@ public class CodeGenImpl extends CodeGenBase {
         //                 .map(s -> s.dispatch(tc))
         //                 .collect(Collectors.toList()));
         // return maxTempsCount;
-        return 8;
+        return 12;
     }
 
     protected int _getFnArSize(FuncInfo fni)
@@ -256,16 +267,12 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         // if no explicit final return statement, return None implicitly
-        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt)) {
+        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
+        {
             backend.emitMV(A0, ZERO, format("[fn=%s] Returning None implicitly", funcInfo.getFuncName()));
-        } else {
-            // ReturnStmt rs = (ReturnStmt) funcInfo
-            //         .getStatements()
-            //         .stream()
-            //         .filter(stmt -> stmt instanceof ReturnStmt)
-            //         .findAny()
-            //         .get();
-            // rs.value.dispatch(stmtAnalyzer);
+        }
+        else
+        {
         }
 
         backend.emitJ(stmtAnalyzer.epilogue, format("[fn=%s] jump to epilogue", funcInfo.getFuncName()));
@@ -344,6 +351,30 @@ public class CodeGenImpl extends CodeGenBase {
             return clearTemps(backend, MAX_TEMP_COUNT);
         }
 
+        // assume stack is full-sized
+        static public int shrinkTopStackTo(
+                RiscVBackend backend,
+                int MAX_TEMP_COUNT, int curTemp, String cmnt)
+        {
+            int wsz = backend.getWordSize();
+            backend.emitADDI(SP, SP,
+                    // +MAX_TEMP_COUNT * wsz - (curTemp - 1) * wsz,
+                    +(MAX_TEMP_COUNT - (curTemp - 1)) * wsz,
+                    cmnt);
+            return curTemp;
+        }
+
+        static public int inflateStack(
+                RiscVBackend backend,
+                int MAX_TEMP_COUNT, int curTemp, String cmnt)
+        {
+            int wsz = backend.getWordSize();
+            backend.emitADDI(SP, SP,
+                    -(MAX_TEMP_COUNT - (curTemp - 1)) * wsz,
+                    cmnt);
+            return curTemp;
+        }
+
         static public int pushTempTopStackAligned(
                 RiscVBackend backend,
                 RiscVBackend.Register reg, int MAX_TEMP_COUNT, int curTemp,
@@ -354,6 +385,43 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitSW(reg, SP,
                     (curTemp++ -1) * backend.getWordSize(),
                     cmnt);
+            return curTemp;
+        }
+
+        static public SimpleEntry<
+                        Integer, //updated curTemp
+                        List< SimpleEntry<RiscVBackend.Register, Integer> > >
+            backupRegistersToTemp(
+                RiscVBackend bke,
+                int MAX_TEMP_COUNT, int curTemp,
+                String cmnt,
+                RiscVBackend.Register...regs)
+        {
+            List< SimpleEntry<RiscVBackend.Register, Integer> > token = new ArrayList<>();
+            for (RiscVBackend.Register r : regs)
+            {
+                token.add(new SimpleEntry<>(r, curTemp));
+                curTemp = AsmHelper.pushTemp(bke, r, MAX_TEMP_COUNT, curTemp, cmnt);
+            }
+            return new SimpleEntry<>(curTemp, token);
+        }
+
+        static public int
+            restoreRegisters(
+                    RiscVBackend bke,
+                    int MAX_TEMP_COUNT, int curTemp,
+                    String cmnt,
+                    List< SimpleEntry<RiscVBackend.Register, Integer> > token)
+        {
+            // restore in reverse order
+            for (int i = token.size() - 1; i >= 0; i--)
+            {
+                SimpleEntry< RiscVBackend.Register, Integer > regInt = token.get(i);
+                if (curTemp - 1 != regInt.getValue())
+                    throw new RuntimeException(
+                            format("[restoring reg] slot for reg %s is not at top of stack", regInt.getKey()));
+                curTemp = popTempToReg(bke, regInt.getKey(), MAX_TEMP_COUNT, curTemp, cmnt);
+            }
             return curTemp;
         }
 
@@ -550,33 +618,40 @@ public class CodeGenImpl extends CodeGenBase {
         public Void analyze(ReturnStmt stmt) {
             // TODO: this assumes that an @f.size constant had been defined. It hasn't been (yet).
             // computes return value
-            stmt.value.dispatch(this);
-            _emitSeparator("<<<epilogue", ".");
+            if (stmt.value != null)
+                stmt.value.dispatch(this);
+            else
+                bke.emitLI(A0, 0, "Return None implicitly");
+            // _emitSeparator("<<<epilogue", ".");
             backend.emitLW(RA, FP, -4, "Get return address");
             backend.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
             backend.emitADDI(SP, SP, _getFnArSize(funcInfo), "Restore stack pointer");
             backend.emitJR(RA, "Return to caller");
-            _emitSeparator("epilogue>>>", ".");
+            // _emitSeparator("epilogue>>>", ".");
             return null;
         }
 
         @Override
-        public Void analyze(BinaryExpr be) {
+        public Void analyze(BinaryExpr be)
+        {
             Label evaluateSecondExpressionLocalLabel = generateLocalLabel();
             Label exitBinaryExprLocalLabel = generateLocalLabel();
 
             be.left.dispatch(this);
-            _pushRegToStack(A0, "Store binop's left operand to stack");
+            // _pushRegToStack(A0, "Store binop's left operand to stack");
+            int left = pushTemp(A0, "left-operand", "Store binop's left operand to stack");
 
             //OR short-circuiting
-            if (be.operator.equals("or")) {
+            if (be.operator.equals("or"))
+            {
                 backend.emitLI(T0, 1, "Load 1 into temp reg");
                 backend.emitBEQ(A0, T0, exitBinaryExprLocalLabel, "Compare if A0 is true");
                 backend.emitJ(evaluateSecondExpressionLocalLabel, "Jump to exit binary expr local label");
             }
 
             //AND short-circuiting
-            if (be.operator.equals("and")) {
+            if (be.operator.equals("and"))
+            {
                 backend.emitLI(T0, 0, "Load 0 into temp reg");
                 backend.emitBEQ(A0, T0, exitBinaryExprLocalLabel, "Compare if A0 is false");
                 backend.emitJ(evaluateSecondExpressionLocalLabel, "Jump to exit binary expr local label");
@@ -584,11 +659,25 @@ public class CodeGenImpl extends CodeGenBase {
 
             backend.emitLocalLabel(evaluateSecondExpressionLocalLabel, "Evaluate OR second expression");
             be.right.dispatch(this);
-            _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
+            // _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
+            loadTempToReg(T1, left, "load binop's left operand from stack to `T1`");
 
-            switch (be.operator) {
+            switch (be.operator)
+            {
                 case "+":
-                    backend.emitADD(A0, T1, A0, "+ two operands");
+                    if (be.left.getInferredType().isListType())
+                    {
+                        pushTemp(T1, "left-expr", "push left list to stack");
+                        pushTemp(A0, "right-expr", "push right list to stack");
+                        int token = shrinkTopStackTo(curTemp, "shrink stack");
+                        bke.emitJAL(concatListLabel, "+ two lists");
+                        inflateStack(token, "restore stack");
+                        popNTemps(2, "pop left-expr and right-expr off stack");
+                    }
+                    else
+                    {
+                        backend.emitADD(A0, T1, A0, "+ two operands");
+                    }
                     break;
                 case "-":
                     backend.emitSUB(A0, T1, A0, "- two operands");
@@ -671,7 +760,7 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitSUB(A0, T0, A0, "Negate OR operation to get ADD");
                     break;
             }
-
+            popNTemps(1, "pop [left-operand]");
             backend.emitLocalLabel(exitBinaryExprLocalLabel, "Exit binary expression local label");
             return null;
         }
@@ -690,12 +779,14 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
+        // TODO:: SHOULD NOT USE! Instead, use pushTemp/loadTempToReg/popTempToReg
         protected Integer _pushRegToStack(RiscVBackend.Register reg, String cmt) {
             backend.emitADDI(SP, SP, -4, cmt);
             backend.emitSW(reg, SP, 0, format("push reg %s to stack", reg.toString()));
             return null;
         }
 
+        // TODO:: SHOULD NOT USE! Instead, use pushTemp/loadTempToReg/popTempToReg
         protected Integer _popStackToReg(RiscVBackend.Register reg, String cmt) {
             backend.emitLW(reg, SP, 0, format("pop stack to reg %s", reg.toString()));
             backend.emitADDI(SP, SP, +4, cmt);
@@ -736,7 +827,6 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         public Void loadLocalVarToReg(
-                RiscVBackend backend,
                 FuncInfo fn, int varIdx,
                 RiscVBackend.Register fp, RiscVBackend.Register dest,
                 String cmt)
@@ -752,8 +842,48 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
+        // this fn should be used to simplify `analyze(Identifier id)`
+        // this will walk the static links and find the offset of ident relative to `fp`.
+        public void walkAndFindOffsetOfId(
+                FuncInfo fni,
+                Identifier id,
+                RiscVBackend.Register fp,
+                RiscVBackend.Register dest,
+                String cmnt,
+                Func5<RiscVBackend, RiscVBackend.Register, RiscVBackend.Register, Integer, String, Void> op)
+        {
+            FuncInfo actualOuterScope = fni;
+            while (actualOuterScope != null)
+            {
+                if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name)) ||
+                        actualOuterScope.getParams().contains(id.name))
+                {
+                    int varIdx = actualOuterScope.getVarIndex(id.name);
+                    AsmHelper._accessRegToVar(
+                            backend, actualOuterScope,
+                            varIdx, fp, dest,
+                            cmnt, op);
+                    break;
+                }
+                else
+                {
+                    String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
+                    if (actualOuterScope.getParentFuncInfo() != null)
+                    {
+                        AsmHelper.loadLocalVarToReg(backend,
+                                actualOuterScope, -1, fp, fp,
+                                format("Load static link from %s to %s",
+                                        actualOuterScope.getFuncName(),
+                                        parentFuncInfoName));
+                    }
+                    actualOuterScope = actualOuterScope.getParentFuncInfo();
+                }
+            }
+        }
+
         @Override
-        public Void analyze(Identifier id) {
+        public Void analyze(Identifier id)
+        {
             if (funcInfo != null) {
                 if (funcInfo.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
                         || funcInfo.getParams().contains(id.name)) {
@@ -837,7 +967,8 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(UnaryExpr ue) {
+        public Void analyze(UnaryExpr ue)
+        {
             String operator = ue.operator;
             ue.operand.dispatch(this);
 
@@ -849,21 +980,25 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(CallExpr ce) {
+        public Void analyze(CallExpr ce)
+        {
             String functionName = ce.function.name;
             FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
             List<String> functionParams = functionInfo.getParams();
             // int fnArSz = _getFnArSize(funcInfo);
 
-            int stackGrowth = 0;
+            // int stackGrowth = 0;
 
+            List<Integer> tempLocs = new ArrayList<>();
             // If the callee is statically nested, first push the `static link`
-            if (functionInfo.getParentFuncInfo() != null) {
+            if (functionInfo.getParentFuncInfo() != null)
+            {
                 // Retrieve a static link to the static outer scope.
                 FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
                 FuncInfo actualOuterScope = funcInfo;
                 backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
-                while (!actualOuterScope.equals(staticOuterScope)) {
+                while (!actualOuterScope.equals(staticOuterScope))
+                {
                     // deference static link
                     // backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
                     AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
@@ -873,12 +1008,14 @@ public class CodeGenImpl extends CodeGenBase {
                     actualOuterScope = actualOuterScope.getParentFuncInfo();
                 }
                 // now push static link as sort of "-1"-st argument.
-                _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
-                stackGrowth++;
+                // _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
+                tempLocs.add(pushTemp(T0, "static-link",
+                        format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName())));
+                // stackGrowth++;
             }
 
-            // for (int i = ce.args.size() - 1; i >= 0; i--)
-            for (int i = 0; i < ce.args.size(); i++) {
+            for (int i = 0; i < ce.args.size(); i++)
+            {
                 Expr argExpr = ce.args.get(i);
                 String paramName = functionParams.get(i);
                 StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
@@ -888,25 +1025,30 @@ public class CodeGenImpl extends CodeGenBase {
 
                 //Handle "wrapping" integers and booleans
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.INT_TYPE)) {
+                        && argExpr.getInferredType().equals(Type.INT_TYPE))
+                {
                     // Call Int Wrapping Code Emitter
                     wrapInteger();
                 }
 
                 if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.BOOL_TYPE)) {
+                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
+                {
                     // Call Bool Wrapping Code Emitter: Create Bool object
                     wrapBoolean();
                 }
 
-                _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
-                stackGrowth++;
+                // _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
+                tempLocs.add(pushTemp(A0,
+                        format("arg %d-th", i),
+                        format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name)));
+                // stackGrowth++;
             }
 
+            int tk = shrinkTopStackTo(curTemp, "shrink stack");
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
-            // if (funcInfo != null)
-            //     backend.emitADDI(SP, FP, -_getFnArSize(funcInfo), "Set SP to top of stack");
-            backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
+            inflateStack(tk, "inflate stack");
+            // backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
             return null;
         }
 
@@ -919,7 +1061,8 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitBEQZ(A0, falseElseBranch, "If A0 == 0, jump to falseElseBranch");
 
             //TRUE Branch
-            for (Stmt thenStmt : ifStmt.thenBody) {
+            for (Stmt thenStmt : ifStmt.thenBody)
+            {
                 thenStmt.dispatch(this);
             }
             backend.emitJAL(finishIfStmtBranch, null);
@@ -1054,14 +1197,21 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitInsn("jal wrapBoolean", null);
         }
 
+        public List<SimpleEntry<RiscVBackend.Register, Integer>>
+            _backupRegisters(String cmnt, RiscVBackend.Register...regs)
+        {
+            SimpleEntry<Integer, List<SimpleEntry<RiscVBackend.Register, Integer>>> ret =
+                    AsmHelper.backupRegistersToTemp(bke, MAX_TEMPS, curTemp, cmnt, regs);
+            curTemp = ret.getKey();
+            return ret.getValue();
+        }
 
-        // TODO: delete this
-        // public int initTemps()
-        // {
-        //     tempContent.clear();
-        //     curTemp = AsmHelper.initTemps(backend, MAX_TEMPS);
-        //     return curTemp;
-        // }
+        public void
+        _restoreRegisters(String cmnt, List<SimpleEntry<RiscVBackend.Register, Integer>> token)
+        {
+            curTemp = AsmHelper.restoreRegisters(bke, MAX_TEMPS, curTemp, cmnt, token);
+            return ;
+        }
 
         public int pushTemp(RiscVBackend.Register reg, String content, String cmnt)
         {
@@ -1084,6 +1234,20 @@ public class CodeGenImpl extends CodeGenBase {
             String content = tempContent.get(temp - 1);
             AsmHelper.storeTempFromReg(backend, reg, MAX_TEMPS, temp,
                     format("[assign-temp `%s`] ", content) + cmnt);
+        }
+
+        public int shrinkTopStackTo(int temp, String cmnt)
+        {
+            AsmHelper.shrinkTopStackTo(backend, MAX_TEMPS, temp,
+                    format("[deflate-stack] ") + cmnt);
+            return temp;
+        }
+
+        public int inflateStack(int temp, String cmnt)
+        {
+            AsmHelper.inflateStack(backend, MAX_TEMPS, temp,
+                    format("[inflate-stack] ") + cmnt);
+            return temp;
         }
 
         public int popNTemps(int N, String cmnt)
@@ -1115,27 +1279,30 @@ public class CodeGenImpl extends CodeGenBase {
             return oldcurtemp;
         }
 
-        // TODO: consider deleting this
-        // public int clearTemps()
-        // {
-        //     tempContent.clear();
-        //     return initTemps();
-        // }
-
         public Void analyze(ListExpr le)
         {
-            _emitSeparator("[[ construct-list", ".");
-            bke.emitLI(A0, le.elements.size(), "get list's size");
-            pushTempTopStackAligned(A0, "size", "store size to stack");
-            for (int i = le.elements.size() - 1; i >= 0; i--)
+            // _emitSeparator("[[ construct-list", ".");
+            for (int i = 0; i < le.elements.size(); i++)
             {
                 Expr e = le.elements.get(i);
                 e.dispatch(this);
-                pushTempTopStackAligned(A0, format("%d-th elem", i), format("push element %d-th to temp-stack", i));
+                pushTemp(A0, "list-elem", format("construct list element with index= %s", i));
             }
+
+            bke.emitLI(A0, le.elements.size(), "get list's size");
+            pushTemp(A0, "list-size", format("push list size (=%d) to stack", le.elements.size()));
+            int token = shrinkTopStackTo(curTemp, format("Shrink top of stack before calling `conslist`"));
+            // pushTempTopStackAligned(A0, "size", "store size to stack");
+            // for (int i = le.elements.size() - 1; i >= 0; i--)
+            // {
+            //     // Expr e = le.elements.get(i);
+            //     // e.dispatch(this);
+            //     pushTempTopStackAligned(A0, format("%d-th elem", i), format("push element %d-th to temp-stack", i));
+            // }
             bke.emitJAL(consListLabel, "construct list");
+            inflateStack(token, "inflate stack");
             popNTemps(1 + le.elements.size(), "Pop temporaries");
-            _emitSeparator("construct-list ]]", ".");
+            // _emitSeparator("construct-list ]]", ".");
             return null;
         }
 
@@ -1224,20 +1391,67 @@ public class CodeGenImpl extends CodeGenBase {
             bke.emitADDI(T1, T1, 1, "++idx");
             storeTempFromReg(T1, idx, "store index on temp-stack");
 
-            bke.emitADDI(T1, T1, listHeaderWords - 1,
-                    "Compute list element offset in words (n - 1 because 1-based index)");
-            bke.emitSLLI(T1, T1, 2, "Compute list element offset in bytes");
-            bke.emitADD(T1, T0, T1, "t1 = ptr-to-indexed-element");
-            bke.emitLW(T0, T1, 0, "t0 = value-at-index");
+            if (fs.iterable.getInferredType().isListType())
+            {
+                bke.emitADDI(T1, T1, listHeaderWords - 1,
+                        "Compute list element offset in words (n - 1 because 1-based index)");
+                bke.emitSLLI(T1, T1, 2, "Compute list element offset in bytes");
+                bke.emitADD(T1, T0, T1, "t1 = ptr-to-indexed-element");
+                bke.emitLW(T0, T1, 0, "t0 = value-at-index");
+            }
+            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
+            {
+                bke.emitADDI(T1, T1, -1, null);
+                bke.emitADDI(T1, T1, (strHeaderWords) * backend.getWordSize(),
+                        "Convert index to offset to char in bytes");
+                bke.emitADD(T1, T0, T1, "Get pointer to char");
+                bke.emitLBU(T1, T1, 0, "Load character");
+
+                bke.emitLI(T0, 20, "????"); // TODO: explain this
+                bke.emitMUL(T1, T1, T0, "t1 = t1 * 20;; Multiply by size of string object");
+                bke.emitLA(T0, charTable, "Index into single-char table");
+                bke.emitADD(T0, T0, T1, "t0 = pointer-to-specific-string-in-char-table");
+            }
+            else
+            {
+                throw new IllegalArgumentException("should be unreachable");
+            }
             // t0 = value-at-idx; t1 = ptr-to-index-elem
 
             // assign to it var
+            SymbolInfo si = sym.get(fs.identifier.name);
             if ( fs.identifier.getInferredType().equals(Type.INT_TYPE)
-                || fs.identifier.getInferredType().equals(Type.BOOL_TYPE))
+                || fs.identifier.getInferredType().equals(Type.BOOL_TYPE) )
             { // unboxed
-                SymbolInfo si = sym.get(fs.identifier.name);
                 if (si instanceof GlobalVarInfo)
-                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1, "store t0 into vec[index]");
+                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1,
+                            format("store t0 into global `%s`", fs.identifier.name));
+                else
+                {
+                    bke.emitMV(T2, FP, "t2 = fp");
+                    walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
+                            (bke, r1, r2, i, cmnt) -> {
+                                bke.emitSW(r1, r2, i, cmnt);
+                                return null;
+                            });
+                }
+            }
+            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
+            {
+                if (si instanceof GlobalVarInfo)
+                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1, null);
+            }
+            else
+            {
+                // fs.identifier.dispatch(this);
+                // bke.emitSW(T0, A0, 0,
+                //         format("make loop-var `%s` points to element t0", fs.identifier.name));
+                bke.emitMV(T2, FP, "t2 = fp");
+                walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
+                        (bke, r1, r2, i, cmnt) -> {
+                            bke.emitSW(r1, r2, i, cmnt);
+                            return null;
+                        });
             }
 
             // potential function invocations.
@@ -1283,15 +1497,148 @@ public class CodeGenImpl extends CodeGenBase {
         emitWrappedBoolean();
         emitConcatList();
         emitConsList();
+        emitCharTable();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
+    private static final int strHeaderWords = 4; // last word is __len__
     private static final int D__elts__ = 16;
+
+    // optimization: create a table of size=1 strings for easy lookup.
+    protected void emitCharTable()
+    {
+        Label loop = generateLocalLabel();
+        bke.emitGlobalLabel(createCharTable);
+        bke.emitLA(A0, strClass.getPrototypeLabel(), "get string prototype");
+        bke.emitLW(T0, A0, 0, "get str tag");
+        bke.emitLW(T1, A0, 4, "get object size");
+        bke.emitLW(T2, A0, 8, "Get ptr-to-dispatch-table");
+        bke.emitLI(T3, 1, "size of string");
+
+        bke.emitLA(A0, charTable, "get ptr to charTable");
+        bke.emitLI(T4, 256, null);
+        bke.emitMV(T5, ZERO, "set up idx = 0");
+
+        bke.emitLocalLabel(loop, "loop to create char table");
+        bke.emitSW(T0, A0, 0, "store type tag");
+        bke.emitSW(T1, A0, 4, "store object size");
+        bke.emitSW(T2, A0, 8, "store ptr-to-dispatch-table");
+        bke.emitSW(T3, A0, 12, "store size of string");
+        bke.emitSW(T5, A0, 16, "store the character");
+
+        bke.emitADDI(A0, A0, 20, "jumps to the next location to store character");
+        bke.emitADDI(T5, T5, 1, "char = char + 1");
+        bke.emitBNE(T4, T5, loop, "goto-loop");
+
+        bke.emitJR(RA, "return");
+        bke.emitInsn(".data", null);
+        bke.emitInsn(".align 2", "to ensure alignment");
+
+        bke.emitGlobalLabel(charTable);
+        bke.emitInsn(".space 5120", null);
+        bke.emitInsn(".text", null);
+    }
 
     protected void emitConcatList()
     {
+        final int wordSz = backend.getWordSize();
+        final int MAX_TEMPS = 16;
+        int curTemp = 1;
+        int FnArSz = 8 + MAX_TEMPS * wordSz ;
+
+        Label concatNone = generateLocalLabel();
+        Label epilogue = generateLocalLabel();
+        Label copyArg1 = generateLocalLabel();
+        Label copyArg2 = generateLocalLabel();
+        Label prepareCopyArg2 = generateLocalLabel();
+
         bke.emitGlobalLabel(concatListLabel);
-        bke.emitADDI(SP, SP, -32, "reserve space for stack");
+
+        backend.emitADDI(SP, SP, -FnArSz, "Reserve space for stack frame");
+
+        backend.emitSW(RA, SP, FnArSz - 4, "Save return address.");
+        backend.emitSW(FP, SP, FnArSz - 8, "Save control link.");
+        backend.emitADDI(FP, SP, FnArSz, "`fp` is at old `sp`.");
+
+        // free up registers s1 -> s5
+        SimpleEntry<Integer, List<SimpleEntry<RiscVBackend.Register, Integer>>> curTempXToken =
+                AsmHelper.backupRegistersToTemp(bke, MAX_TEMPS, curTemp, "backup registers s1->s5",
+                        S1, S2, S3, S4, S5);
+        curTemp = curTempXToken.getKey(); // these functions are pure so must update manually
+
+        _emitSeparator("Compute sum of list lengths and then allocate", ".");
+        // load arg1 and arg2
+        bke.emitLW(T0, FP, 4, "t0 = arg1");
+        bke.emitLW(T1, FP, 0, "t1 = arg2");
+        // asserts neither list is None
+        bke.emitBEQZ(T0, concatNone, "asserts t0 not None");
+        bke.emitBEQZ(T1, concatNone, "asserts t1 not None");
+        // retrieves length
+        bke.emitLW(T0, T0, getAttrOffset(listClass, "__len__"), "t0 = t0.__len__");
+        bke.emitLW(T1, T1, getAttrOffset(listClass, "__len__"), "t1 = t1.__len__");
+        // allocate new array
+        bke.emitADD(S5, T0, T1, "s5 = arg1.len + arg2.len");
+        bke.emitADDI(A1, S5, listHeaderWords,
+                "reserve space for header and load sum into A1 to prep for alloc2");
+        bke.emitLA(A0, listClass.getPrototypeLabel(), "A0 = list-prototype (for alloc2)");
+        bke.emitJAL(objectAllocResizeLabel, "allocate new list");
+
+        _emitSeparator("initialize newly created array", "_");
+        // now initialize the newly allocated list
+        bke.emitSW(S5, A0, getAttrOffset(listClass, "__len__"), "initialize new list's size");
+        bke.emitMV(S5, A0, "s5 = heap-ptr");
+        bke.emitADDI(S3, S5, D__elts__, "s3 = heap-ptr + offset-to-first-element");
+
+        bke.emitLW(S1, FP, 4, "s1 = arg1");
+        bke.emitLW(S2, S1, getAttrOffset(listClass, "__len__"), "s2 = arg1.len");
+
+        _emitSeparator("Copy arg1 into allocated list", ".");
+        // copying arg1 into newly allocated list
+        bke.emitADDI(S1, S1, D__elts__, "s1 = &arg1[0]");
+        bke.emitLocalLabel(copyArg1, "copy arg1 to destination");
+        bke.emitBEQZ(S2, prepareCopyArg2,
+                "loop when s2 > 0; else start initialize the copying of arg2");
+
+        bke.emitLW(A0, S1, 0, "a0 = arg1[0]");
+        bke.emitSW(A0, S3, 0, "*ptr-to-first-elem = a0");
+        bke.emitADDI(S2, S2, -1, "decrement index s2 = (arg1.len ... 1)");
+        bke.emitADDI(S1, S1, 4, "advance to next element of arg1");
+        bke.emitADDI(S3, S3, 4, "ptr-to-first-elem += 4");
+        bke.emitJ(copyArg1, "continue loop");
+
+        // preparing to copy arg2
+        bke.emitLocalLabel(prepareCopyArg2, "preparing to copy arg2");
+        bke.emitLW(S1, FP, 0, "s1 = arg2");
+        bke.emitLW(S2, S1, getAttrOffset(listClass, "__len__"), "s2 = arg2.len");
+        bke.emitADDI(S1, S1, D__elts__, "s1 = &arg2[0]");
+
+        _emitSeparator("Copy arg2 into allocated list", ".");
+        // copy arg2
+        bke.emitLocalLabel(copyArg2, "copy arg2");
+        bke.emitBEQZ(S2, epilogue, "when done copying, go to epilogue");
+        bke.emitLW(A0, S1, 0, "a0 = arg2[0]");
+        bke.emitSW(A0, S3, 0, "*ptr-to-first-element = arg2[0]");
+            // update indices
+            bke.emitADDI(S2, S2, -1, "remaining elements -= 1");
+            bke.emitADDI(S1, S1, 4, "advance to next element of arg2");
+            bke.emitADDI(S3, S3, 4, "ptr-to-first-element += 4");
+            bke.emitJ(copyArg2, "loop");
+
+        // epilogue::
+        bke.emitLocalLabel(epilogue, "cleanup");
+        bke.emitMV(A0, S5, "ret = heap-ptr");
+        // restores registers s1 -> s5
+        curTemp = AsmHelper.restoreRegisters(bke, MAX_TEMPS, curTemp, "restore registers s1 -> s5",
+                curTempXToken.getValue());
+
+        bke.emitLW(RA, FP, -4, "get return addr");
+        bke.emitLW(FP, FP, -8, "Use control link to restore caller's fp");
+        bke.emitADDI(SP, SP, FnArSz, "restore stack ptr");
+        bke.emitJR(RA, "return to caller");
+
+        // concat_none::
+        bke.emitLocalLabel(concatNone, "concat_none:");
+        bke.emitJ(errorNone, "");
     }
 
     // a list constructor
