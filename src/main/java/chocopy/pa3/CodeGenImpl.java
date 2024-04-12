@@ -59,6 +59,7 @@ public class CodeGenImpl extends CodeGenBase {
 
     private final boolean _EMIT_RT_TRACE = true;
     private final Label consListLabel = new Label("conslist");
+    private final Label concatListLabel = new Label("concat");
 
     protected final RiscVBackend bke;
 
@@ -380,6 +381,19 @@ public class CodeGenImpl extends CodeGenBase {
             if (temp < 1)
                 throw new IllegalArgumentException("temp space empty");
             backend.emitLW(reg, SP,
+                    (MAX_TEMP_COUNT - temp) * backend.getWordSize(),
+                    cmnt);
+        }
+
+        static public void storeTempFromReg(
+                RiscVBackend backend,
+                RiscVBackend.Register reg, int MAX_TEMP_COUNT, int temp,
+                String cmnt)
+        {
+            // curTemp : [1...MAX_TEMP_COUNT+1]
+            if (temp < 1)
+                throw new IllegalArgumentException("temp space empty");
+            backend.emitSW(reg, SP,
                     (MAX_TEMP_COUNT - temp) * backend.getWordSize(),
                     cmnt);
         }
@@ -839,7 +853,9 @@ public class CodeGenImpl extends CodeGenBase {
             String functionName = ce.function.name;
             FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
             List<String> functionParams = functionInfo.getParams();
-            int fnArSz = _getFnArSize(functionInfo);
+            // int fnArSz = _getFnArSize(funcInfo);
+
+            int stackGrowth = 0;
 
             // If the callee is statically nested, first push the `static link`
             if (functionInfo.getParentFuncInfo() != null) {
@@ -858,6 +874,7 @@ public class CodeGenImpl extends CodeGenBase {
                 }
                 // now push static link as sort of "-1"-st argument.
                 _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
+                stackGrowth++;
             }
 
             // for (int i = ce.args.size() - 1; i >= 0; i--)
@@ -883,10 +900,13 @@ public class CodeGenImpl extends CodeGenBase {
                 }
 
                 _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
+                stackGrowth++;
             }
 
             backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
-            backend.emitADDI(SP, FP, -fnArSz, "Set SP to top of stack");
+            // if (funcInfo != null)
+            //     backend.emitADDI(SP, FP, -_getFnArSize(funcInfo), "Set SP to top of stack");
+            backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
             return null;
         }
 
@@ -1002,7 +1022,8 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
-        public Void analyze(WhileStmt ws) {
+        public Void analyze(WhileStmt ws)
+        {
             Label whileTopLocalLabel = generateLocalLabel();
             Label whileTrueBodyLabel = generateLocalLabel();
             Label exitWhileLocalLabel = generateLocalLabel();
@@ -1055,12 +1076,19 @@ public class CodeGenImpl extends CodeGenBase {
         {
             String content = tempContent.get(temp - 1);
             AsmHelper.loadTempToReg(backend, reg, MAX_TEMPS, temp,
-                    format("[load-temp `%s`] ", content) + cmnt);
+                    format("[peek-temp `%s`] ", content) + cmnt);
+        }
+
+        public void storeTempFromReg(RiscVBackend.Register reg, int temp, String cmnt)
+        {
+            String content = tempContent.get(temp - 1);
+            AsmHelper.storeTempFromReg(backend, reg, MAX_TEMPS, temp,
+                    format("[assign-temp `%s`] ", content) + cmnt);
         }
 
         public int popNTemps(int N, String cmnt)
         {
-            while (--N >= 1)
+            for (; N >= 1; N--)
             {
                 curTemp--;
                 tempContent.pop();
@@ -1096,6 +1124,7 @@ public class CodeGenImpl extends CodeGenBase {
 
         public Void analyze(ListExpr le)
         {
+            _emitSeparator("[[ construct-list", ".");
             bke.emitLI(A0, le.elements.size(), "get list's size");
             pushTempTopStackAligned(A0, "size", "store size to stack");
             for (int i = le.elements.size() - 1; i >= 0; i--)
@@ -1106,6 +1135,7 @@ public class CodeGenImpl extends CodeGenBase {
             }
             bke.emitJAL(consListLabel, "construct list");
             popNTemps(1 + le.elements.size(), "Pop temporaries");
+            _emitSeparator("construct-list ]]", ".");
             return null;
         }
 
@@ -1126,7 +1156,7 @@ public class CodeGenImpl extends CodeGenBase {
                     format("push list %s onto temp", ie.list.getInferredType()));
 
             ie.index.dispatch(this); // A0 = index
-            // curTemp = AsmHelper.popTempToReg(bke, A1, MAX_TEMPS, curTemp, "retrieve list into A1");
+
             popTempToReg(A1, "retrieve list into A1");
 
             bke.emitBNEZ(A1, notNone, "Ensure not none");
@@ -1148,7 +1178,7 @@ public class CodeGenImpl extends CodeGenBase {
             // invoke op
             opAddr.accept(ie);
 
-            popNTemps(1, "Pop temp");
+            // popNTemps(1, "Pop temp");
 
             return null;
         }
@@ -1169,52 +1199,56 @@ public class CodeGenImpl extends CodeGenBase {
             }) ;
         }
 
-        public Void __analyze(IndexExpr ie)
+        public Void analyze(ForStmt fs)
         {
+            Label fl = generateLocalLabel();
+            Label endLoop = generateLocalLabel();
             Label notNone = generateLocalLabel();
-            Label withinBound = generateLocalLabel();
+            // t1 = idx, t0 = list-ptr
+            bke.emitMV(T1, ZERO, "initialize for-loop index");
+            int idx = pushTemp(T1, "idx", "push idx to temp-stack");
+            fs.iterable.dispatch(this);
+            bke.emitBNEZ(A0, notNone, "Ensure not none");
+            bke.emitJ(errorNone, "Go to None error handler");
+            bke.emitLocalLabel(notNone, "Not None");
+            int vec = pushTemp(A0, fs.iterable.getInferredType().toString(), "push iterable to temp-stack") ;
 
-            assert(getAttrOffset(strClass, "__len__") == getAttrOffset(listClass, "__len__"));
-            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "Load attribute __len__");
+            // for-loop:
+            bke.emitLocalLabel(fl, "for-loop header");
+            loadTempToReg(T0, vec, "pop iterable to t0");
+            loadTempToReg(T1, idx, "peek index in temp-stack");
 
-            // Get list and store on stack
-            ie.list.dispatch(this); // A0 = list
-            pushTemp(A0,
-                    "list",
-                    format("push list %s onto temp", ie.list.getInferredType()));
+            bke.emitLW(T2, T0, getAttrOffset(listClass, "__len__"), "get attr __len__");
+            bke.emitBGEU(T1, T2, endLoop, "end loop if idx >= len(iter)");
+            // if not, continue
+            bke.emitADDI(T1, T1, 1, "++idx");
+            storeTempFromReg(T1, idx, "store index on temp-stack");
 
-            ie.index.dispatch(this); // A0 = index
-            // curTemp = AsmHelper.popTempToReg(bke, A1, MAX_TEMPS, curTemp, "retrieve list into A1");
-            popTempToReg(A1, "retrieve list into A1");
+            bke.emitADDI(T1, T1, listHeaderWords - 1,
+                    "Compute list element offset in words (n - 1 because 1-based index)");
+            bke.emitSLLI(T1, T1, 2, "Compute list element offset in bytes");
+            bke.emitADD(T1, T0, T1, "t1 = ptr-to-indexed-element");
+            bke.emitLW(T0, T1, 0, "t0 = value-at-index");
+            // t0 = value-at-idx; t1 = ptr-to-index-elem
 
-            bke.emitBNEZ(A1, notNone, "Ensure not none");
-            bke.emitJ(errorNone, "Goes to none handler");
-
-            // not_none:
-            // A1 = list_ptr; A0 = index
-            bke.emitLocalLabel(notNone, "Not none");
-            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "get attribute __len__");
-            bke.emitBLTU(A0, T0, withinBound, "Index within bound");
-            bke.emitJ(errorOob, "Go to OOB error handler");
-
-            // within_bound:
-            bke.emitLocalLabel(withinBound, "Index within bound");
-            bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
-            bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
-            bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
-
-            ValueType ty = ie.list.getInferredType().elementType();
-            if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
-                // these types are unboxed so load value directly
-            {
-                bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
-            }
-            else
-            {
-                assert(false);
+            // assign to it var
+            if ( fs.identifier.getInferredType().equals(Type.INT_TYPE)
+                || fs.identifier.getInferredType().equals(Type.BOOL_TYPE))
+            { // unboxed
+                SymbolInfo si = sym.get(fs.identifier.name);
+                if (si instanceof GlobalVarInfo)
+                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1, "store t0 into vec[index]");
             }
 
-            // AsmHelper.clearTemps(bke, MAX_TEMPS, curTemp);
+            // potential function invocations.
+            fs.body.forEach(s -> s.dispatch(this));
+
+            bke.emitJ(fl, "for-loop footer"); // goto for-loop:
+
+            // exit-loop:
+            bke.emitLocalLabel(endLoop, "end loop");
+
+            popNTemps(2, "pop iterable + idx");
             return null;
         }
     }
@@ -1247,11 +1281,18 @@ public class CodeGenImpl extends CodeGenBase {
         emitErrorFunc(errorOob, "Index out of bounds", ERROR_OOB);
         emitWrappedInt();
         emitWrappedBoolean();
+        emitConcatList();
         emitConsList();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
     private static final int D__elts__ = 16;
+
+    protected void emitConcatList()
+    {
+        bke.emitGlobalLabel(concatListLabel);
+        bke.emitADDI(SP, SP, -32, "reserve space for stack");
+    }
 
     // a list constructor
     protected void emitConsList()
