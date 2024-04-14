@@ -123,7 +123,7 @@ public class CodeGenImpl extends CodeGenBase {
         //                 .map(s -> s.dispatch(tc))
         //                 .collect(Collectors.toList()));
         // return maxTempsCount;
-        return 12;
+        return 20;
     }
 
     protected int _getFnArSize(FuncInfo fni)
@@ -618,9 +618,17 @@ public class CodeGenImpl extends CodeGenBase {
                         bke.emitJAL(concatListLabel, "+ two lists");
                         inflateStack(token, "restore stack");
                         popNTemps(2, "pop left-expr and right-expr off stack");
-                    }
-                    else
-                    {
+                    } else if (be.left.getInferredType().equals(Type.STR_TYPE) && be.right.getInferredType().equals(Type.STR_TYPE)) {
+                        //If operating on strings then we should return new concatenated string
+                        pushTemp(T1, "left-expr", "push left list to stack");
+                        pushTemp(A0, "right-expr", "push right list to stack");
+                        int token = shrinkTopStackTo(curTemp, "shrink stack");
+                        concatStrs();
+                        //Set SP back to stack frame top
+                        inflateStack(token, "restore stack");
+                        popNTemps(2, "pop left-expr and right-expr off stack");
+                        backend.emitADDI(SP, SP, -(_getFnArSize(funcInfo)), "Set SP back to stack frame top");
+                    } else {
                         backend.emitADD(A0, T1, A0, "+ two operands");
                     }
                     break;
@@ -1146,6 +1154,10 @@ public class CodeGenImpl extends CodeGenBase {
             backend.emitInsn("jal wrapBoolean", null);
         }
 
+        private void concatStrs() {
+            backend.emitInsn("jal strCat", null);
+        }
+
         public List<SimpleEntry<RiscVBackend.Register, Integer>>
             _backupRegisters(String cmnt, RiscVBackend.Register...regs)
         {
@@ -1449,6 +1461,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitConcatList();
         emitConsList();
         emitCharTable();
+        emitStrCat();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
@@ -1684,5 +1697,102 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitLW(RA, SP, 0, null);
         backend.emitADDI(SP, SP, 8, null);
         backend.emitJR(RA, null);
+    }
+
+    protected void emitStrCat() {
+        Label emitStrCatLabel = new Label("strCat");
+        Label emitT0EmptyLabel = generateLocalLabel();
+        Label emitT1EmptyLabel = generateLocalLabel();
+        Label emitResetLoopAndStoreLabel = generateLocalLabel();
+        Label emitLoopAndStoreForFirstStrLabel = generateLocalLabel();
+        Label emitLoopAndStoreForSecondStrLabel = generateLocalLabel();
+        Label emitAppendNullCharToStrLabel = generateLocalLabel();
+        Label emitCallingConventionCleanup = generateLocalLabel();
+
+        backend.emitGlobalLabel(emitStrCatLabel);
+        //Calling Convention Configuration
+        backend.emitADDI(SP, SP, -12, null);
+        backend.emitSW(RA, SP, 8, null);
+        backend.emitSW(FP, SP, 4, null);
+        backend.emitADDI(FP, SP, 12, null);
+
+        //Load Variables a, b
+        backend.emitLW(T0, FP, 4, "Load first string to T0");
+        backend.emitLW(T1, FP, 0, "Load second string to T1");
+
+        //Get string lengths for T0 and T1
+        backend.emitLW(T0, T0, getAttrOffset(strClass, "__len__"), "Get T0's length");
+        backend.emitLW(T1, T1, getAttrOffset(strClass, "__len__"), "Get T1's length");
+
+        //Check if T0 or T1 is empty. If so just return the other string (Concat with empty string)
+        backend.emitBEQZ(T0, emitT0EmptyLabel, "TO is empty so just return T1");
+        backend.emitBEQZ(T1, emitT1EmptyLabel, "T1 is empty so just return T0");
+
+        //T0 and T1 are not empty so perform concatenation procedure
+        //Calculate new String object size (4 + [(k+1) / 4])
+        backend.emitADD(T0, T0, T1, "k"); //k
+        backend.emitSW(T0, FP, -12, "Store k to stack");
+        backend.emitADDI(T0, T0, 4, null);
+        backend.emitSRLI(T0, T0, 2, null);
+        backend.emitLA(A0, strClass.getPrototypeLabel(), "Get string prototype for alloc2");
+        backend.emitADDI(A1, T0, 4, null);
+        backend.emitInsn("jal alloc2", "jal alloc");
+        //Store string length into __len__ attribute
+        backend.emitLW(T0, FP, -12, "Load k from stack");
+        backend.emitSW(T0, A0, getAttrOffset(strClass, "__len__"), "Store k to __len__ attr");
+
+        //Store concatenated string to __str__ attribute
+        backend.emitADDI(T1, A0, getAttrOffset(strClass, "__str__"), "T1 = address of new __str__ store");
+        backend.emitLW(T0, FP, 4, "Load first string to T0");
+        backend.emitLW(T2, T0, getAttrOffset(strClass, "__len__"), "T2 = T0's length");
+        backend.emitADDI(T0, T0, getAttrOffset(strClass, "__str__"), "T0 = content of 1st string");
+
+        //Loop through all of the characters in T0 and store them sequentially in T1
+        backend.emitLocalLabel(emitLoopAndStoreForFirstStrLabel, "[ENTER BRANCH]: Loop and store for first string");
+        backend.emitBEQZ(T2, emitResetLoopAndStoreLabel, "Finished storing T0, now do the same for T1");
+        backend.emitLBU(T3, T0, 0, "Load byte for first str");
+        backend.emitSB(T3, T1, 0, "Store byte into T1");
+        backend.emitADDI(T2, T2, -1, "Decrement T0's length by 1");
+        backend.emitADDI(T1, T1, 1, "Increment store __str__ address by 1");
+        backend.emitADDI(T0, T0, 1, "Increment str address by 1");
+        backend.emitJ(emitLoopAndStoreForFirstStrLabel, "[JUMP]: Loop and store for T0");
+
+        backend.emitLocalLabel(emitResetLoopAndStoreLabel, "[ENTER BRANCH]: Reset config for second string looping");
+        //Reset "helper" variables
+        backend.emitLW(T0, FP, 0, "Load second string to T0");
+        backend.emitLW(T2, T0, getAttrOffset(strClass, "__len__"), "T2 = T0's length");
+        //backend.emitADDI(T1, T0, getAttrOffset(strClass, "__str__"), "Get second string store __str__ address");
+        backend.emitADDI(T0, T0, getAttrOffset(strClass, "__str__"), "T0 = content of 2nd string");
+
+        //Loop and store for T1
+        backend.emitLocalLabel(emitLoopAndStoreForSecondStrLabel, "[ENTER BRANCH]: Loop and store for second string");
+        backend.emitBEQZ(T2, emitAppendNullCharToStrLabel, "Finish processing T1, jump to add null char to str");
+        backend.emitLBU(T3, T0, 0, "Load byte for second str");
+        backend.emitSB(T3, T1, 0, "Store byte into T1");
+        backend.emitADDI(T2, T2, -1, "Decrement T1's length by 1");
+        backend.emitADDI(T1, T1, 1, "Increment store __str__ address by 1");
+        backend.emitADDI(T0, T0, 1, "Increment str address by 1");
+        backend.emitJ(emitLoopAndStoreForSecondStrLabel, "[JUMP]: Loop and store for T1");
+
+        //T0 is empty. Return T1
+        backend.emitLocalLabel(emitT0EmptyLabel, "[ENTER BRANCH]: T0 Empty Return T1");
+        backend.emitLW(A0, FP, 0, "Return T1");
+        backend.emitJ(emitCallingConventionCleanup, "[JUMP]; Calling Convention Cleanup");
+
+        //T1 is empty. Return T0
+        backend.emitLocalLabel(emitT1EmptyLabel, "[ENTER BRANCH]: T1 Empty Return T0");
+        backend.emitLW(A0, FP, 4, "Return T0");
+        backend.emitJ(emitCallingConventionCleanup, "[JUMP]: Calling Convention Cleanup");
+
+        //Append Null Char to str
+        backend.emitLocalLabel(emitAppendNullCharToStrLabel, "[ENTER BRANCH]: Append Null Char to str");
+        backend.emitSB(ZERO, T1,0, "Append null char to str");
+
+        //Calling Convention Cleanup
+        backend.emitLocalLabel(emitCallingConventionCleanup, "[ENTER BRANCH]: Calling Convention Cleanup");
+        backend.emitLW(RA, FP, -4, null);
+        backend.emitLW(FP, FP, -8, null);
+        backend.emitADDI(SP, SP, 12, null);
+        backend.emitJR(RA, "[JUMP]: Exit StrCat");
     }
 }
