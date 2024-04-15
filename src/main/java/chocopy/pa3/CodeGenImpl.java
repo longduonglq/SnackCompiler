@@ -620,14 +620,15 @@ public class CodeGenImpl extends CodeGenBase {
                         popNTemps(2, "pop left-expr and right-expr off stack");
                     } else if (be.left.getInferredType().equals(Type.STR_TYPE) && be.right.getInferredType().equals(Type.STR_TYPE)) {
                         //If operating on strings then we should return new concatenated string
-                        pushTemp(T1, "left-expr", "push left list to stack");
-                        pushTemp(A0, "right-expr", "push right list to stack");
+                        pushTemp(T1, "left-expr", "push left string to stack");
+                        pushTemp(A0, "right-expr", "push right string to stack");
                         int token = shrinkTopStackTo(curTemp, "shrink stack");
                         concatStrs();
                         //Set SP back to stack frame top
                         inflateStack(token, "restore stack");
                         popNTemps(2, "pop left-expr and right-expr off stack");
-                        backend.emitADDI(SP, SP, -(_getFnArSize(funcInfo)), "Set SP back to stack frame top");
+
+//                        backend.emitADDI(SP, SP, -(_getFnArSize(funcInfo)), "Set SP back to stack frame top");
                     } else {
                         backend.emitADD(A0, T1, A0, "+ two operands");
                     }
@@ -840,12 +841,18 @@ public class CodeGenImpl extends CodeGenBase {
             if (funcInfo != null) {
                 if (funcInfo.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(id.name))
                         || funcInfo.getParams().contains(id.name)) {
-                    int index = funcInfo.getVarIndex(id.name);
-                    VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
-                    if (index < funcInfo.getParams().size()) {
-                        return loadLocalParamToReg(vi, A0);
+                    if (id.name.equals("self")) {
+                        ClassInfo classInfo = (ClassInfo) sym.get(id.getInferredType().className());
+                        String objectClassName = classInfo.getClassName();
+                        backend.emitLA(A0, classInfo.getPrototypeLabel(), format("get pointer to prototype: %s", objectClassName));
                     } else {
-                        return loadLocalVarToReg(vi, A0);
+                        int index = funcInfo.getVarIndex(id.name);
+                        VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
+                        if (index < funcInfo.getParams().size()) {
+                            return loadLocalParamToReg(vi, A0);
+                        } else {
+                            return loadLocalVarToReg(vi, A0);
+                        }
                     }
                 } else // id must be nonlocal or declared somewhere in a previous scope
                 {
@@ -868,20 +875,6 @@ public class CodeGenImpl extends CodeGenBase {
                                         T0,
                                         A0,
                                         "Load param " + svi.getVarName() + " into A0");
-                            } else {
-                                int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
-                                backend.emitLW(A0, T0, offset,
-                                        format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
-                                                actualOuterScope.getFuncName(),
-                                                svi.getVarName(),
-                                                svi.getVarType(),
-                                                "A0"));
-                            }
-
-                            if (varIdx < actualOuterScope.getParams().size()) {
-                                return AsmHelper.loadLocalVarToReg(
-                                        backend,
-                                        actualOuterScope, varIdx, T0, A0, "Load param " + svi.getVarName() + " into A0");
                             } else {
                                 int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
                                 backend.emitLW(A0, T0, offset,
@@ -933,79 +926,136 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
+        public Void analyze(MemberExpr me) {
+            Label notNoneLocalLabel = generateLocalLabel();
+
+            String objectName = me.object.getInferredType().className();
+            String memberName = me.member.name;
+            me.object.dispatch(this);
+
+            //Check to see if object (A0) is None or not
+            backend.emitBNEZ(A0, notNoneLocalLabel, "Ensure not None");
+            //Object is None
+            backend.emitJ(errorNone, format("[GOTO]: %s", errorNone.labelName));
+
+            //Object is not None
+            backend.emitLocalLabel(notNoneLocalLabel, format("[GOTO]: %s", notNoneLocalLabel.labelName));
+
+            //Check to see if it is an attribute or a method
+            if (me.getInferredType().isFuncType()) {
+                //Go to object's dispatch table and retrieve method's location
+                ClassInfo meObjectClassInfo = (ClassInfo) sym.get(objectName);
+                int methodOffset = meObjectClassInfo.getMethodIndex(memberName) * (backend.getWordSize());
+                backend.emitLA(A0, meObjectClassInfo.getDispatchTableLabel(), format("load %s's dispatch table label into A0", objectName));
+                backend.emitLW(A0, A0, methodOffset, format("load address of method: %s.%s", objectName, memberName));
+                int token = shrinkTopStackTo(curTemp, "shrink stack");
+                backend.emitJALR(A0, format("invoke %s.%s", objectName, memberName));
+                inflateStack(token, "restore stack");
+            } else {
+                int attributeOffsetInWords = getObjectAttributeOffsetInWords(objectName, memberName);
+                backend.emitLW(A0, A0, attributeOffsetInWords, format("get attribute %s.%s", objectName, memberName));
+            }
+
+            return null;
+        }
+
+        @Override
         public Void analyze(CallExpr ce)
         {
             String functionName = ce.function.name;
+            SymbolInfo ceSymbolInfo = sym.get(functionName);
             // TODO:: add logic for method invocation here.
-            if (!(sym.get(functionName) instanceof FuncInfo))
-                return null;
 
-            FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
-            List<String> functionParams = functionInfo.getParams();
-            // int fnArSz = _getFnArSize(funcInfo);
+            if (ceSymbolInfo instanceof FuncInfo) {
+                //FUNCTIONS
+                FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
+                List<String> functionParams = functionInfo.getParams();
+                // int fnArSz = _getFnArSize(funcInfo);
 
-            // int stackGrowth = 0;
+                // int stackGrowth = 0;
 
-            List<Integer> tempLocs = new ArrayList<>();
-            // If the callee is statically nested, first push the `static link`
-            if (functionInfo.getParentFuncInfo() != null)
-            {
-                // Retrieve a static link to the static outer scope.
-                FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
-                FuncInfo actualOuterScope = funcInfo;
-                backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
-                while (!actualOuterScope.equals(staticOuterScope))
+                List<Integer> tempLocs = new ArrayList<>();
+                // If the callee is statically nested, first push the `static link`
+                if (functionInfo.getParentFuncInfo() != null)
                 {
-                    // deference static link
-                    // backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
-                    AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
-                            format("Get static link from %s to %s",
-                                    actualOuterScope.getFuncName(),
-                                    actualOuterScope.getParentFuncInfo().getFuncName()));
-                    actualOuterScope = actualOuterScope.getParentFuncInfo();
+                    // Retrieve a static link to the static outer scope.
+                    FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
+                    FuncInfo actualOuterScope = funcInfo;
+                    backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
+                    while (!actualOuterScope.equals(staticOuterScope))
+                    {
+                        // deference static link
+                        // backend.emitLW(T0, T0, 0, format("Get static link to %s", actualOuterScope.getFuncName()));
+                        AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
+                                format("Get static link from %s to %s",
+                                        actualOuterScope.getFuncName(),
+                                        actualOuterScope.getParentFuncInfo().getFuncName()));
+                        actualOuterScope = actualOuterScope.getParentFuncInfo();
+                    }
+                    // now push static link as sort of "-1"-st argument.
+                    // _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
+                    tempLocs.add(pushTemp(T0, "static-link",
+                            format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName())));
+                    // stackGrowth++;
                 }
-                // now push static link as sort of "-1"-st argument.
-                // _pushRegToStack(T0, format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName()));
-                tempLocs.add(pushTemp(T0, "static-link",
-                        format("Push static link to \"%s\" to stack", actualOuterScope.getFuncName())));
-                // stackGrowth++;
+
+                for (int i = 0; i < ce.args.size(); i++)
+                {
+                    Expr argExpr = ce.args.get(i);
+                    String paramName = functionParams.get(i);
+                    StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
+
+                    //Should output result into A0 reg
+                    argExpr.dispatch(this);
+
+                    //Handle "wrapping" integers and booleans
+                    if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
+                            && argExpr.getInferredType().equals(Type.INT_TYPE))
+                    {
+                        // Call Int Wrapping Code Emitter
+                        wrapInteger();
+                    }
+
+                    if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
+                            && argExpr.getInferredType().equals(Type.BOOL_TYPE))
+                    {
+                        // Call Bool Wrapping Code Emitter: Create Bool object
+                        wrapBoolean();
+                    }
+
+                    // _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
+                    tempLocs.add(pushTemp(A0,
+                            format("arg %d-th", i),
+                            format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name)));
+                    // stackGrowth++;
+                }
+
+                int tk = shrinkTopStackTo(curTemp, "shrink stack");
+                backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
+                inflateStack(tk, "inflate stack");
+                // backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
+            } else if (ceSymbolInfo instanceof ClassInfo) {
+                //Instantiate new object (new)
+                ClassInfo ceClassInfo = (ClassInfo) ceSymbolInfo;
+                String objectClassName = ceClassInfo.getClassName();
+                backend.emitLA(A0, ceClassInfo.getPrototypeLabel(), format("get pointer to prototype: %s", objectClassName));
+                backend.emitInsn("jal alloc", "allocate new object in A0");
+                pushTemp(A0, format("%s prototype", objectClassName), format("push %s prototype to stack", objectClassName));
+                int token = shrinkTopStackTo(curTemp, "shrink stack");
+                backend.emitLW(A1, A0, 8, "load addr of new obj's dispatch table");
+                backend.emitLW(A1, A1, 0, format("load addr of %s.__init__", objectClassName));
+                backend.emitJALR(A1, format("invoke %s.__init__", objectClassName));
+                //Set SP back to stack frame top
+                inflateStack(token, "restore stack");
+                popTempToReg(A0, "pop new object addr to A0");
             }
+            return null;
+        }
 
-            for (int i = 0; i < ce.args.size(); i++)
-            {
-                Expr argExpr = ce.args.get(i);
-                String paramName = functionParams.get(i);
-                StackVarInfo paramInfo = (StackVarInfo) functionInfo.getSymbolTable().get(paramName);
-
-                //Should output result into A0 reg
-                argExpr.dispatch(this);
-
-                //Handle "wrapping" integers and booleans
-                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.INT_TYPE))
-                {
-                    // Call Int Wrapping Code Emitter
-                    wrapInteger();
-                }
-
-                if (paramInfo.getVarType().equals(Type.OBJECT_TYPE)
-                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
-                {
-                    // Call Bool Wrapping Code Emitter: Create Bool object
-                    wrapBoolean();
-                }
-
-                // _pushRegToStack(A0, format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name));
-                tempLocs.add(pushTemp(A0,
-                        format("arg %d-th", i),
-                        format("push arg %d-th `%s` of \"%s\" to stack", i, paramName, ce.function.name)));
-                // stackGrowth++;
-            }
-
-            int tk = shrinkTopStackTo(curTemp, "shrink stack");
-            backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
-            inflateStack(tk, "inflate stack");
-            // backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
+        @Override
+        public Void analyze(MethodCallExpr mce) {
+            //MemberExpr Get back method address location?
+            mce.method.dispatch(this);
             return null;
         }
 
@@ -1065,20 +1115,35 @@ public class CodeGenImpl extends CodeGenBase {
                         }
                     });
                     continue;
+                } else if (targetExpr instanceof MemberExpr) {
+                    Label notNoneLocalLabel = generateLocalLabel();
+                    MemberExpr memberExpr = (MemberExpr) targetExpr;
+                    String objectName = memberExpr.object.getInferredType().className();
+                    String attributeName = memberExpr.member.name;
+
+                    pushTemp(A0, "rhs value", "push rhs value to stack");
+                    int token = shrinkTopStackTo(curTemp, "shrink stack");
+
+                    //Not sure why I can directly store rhs value to the attribute location from the get go??
+                    memberExpr.object.dispatch(this);
+
+                    //Check to see if object is none or not
+                    backend.emitBNEZ(A0, notNoneLocalLabel, "Ensure not None");
+                    //Object is None
+                    backend.emitJ(errorNone, format("[GOTO]: %s", errorNone.labelName));
+
+                    //Object is not None
+                    backend.emitLocalLabel(notNoneLocalLabel, format("[GOTO]: %s", notNoneLocalLabel.labelName));
+                    //Set SP back to stack frame top
+                    inflateStack(token, "restore stack");
+                    int attributeOffsetInWords = getObjectAttributeOffsetInWords(objectName, attributeName);
+                    popTempToReg(T0, "pop rhs value from stack");
+                    backend.emitSW(T0, A0, attributeOffsetInWords, format("store dispatched value to %s.%s", objectName, attributeName));
+
+                    continue;
                 }
 
-                //box if value is of type int or bool and target type is object
-                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
-                        as.value.getInferredType().equals(Type.INT_TYPE))
-                {
-                    wrapInteger();
-                }
-
-                if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
-                        as.value.getInferredType().equals(Type.BOOL_TYPE)) {
-                    wrapBoolean();
-                }
-
+                box(targetExpr, as.value);
 
                 if (targetExprSymbolInfo instanceof GlobalVarInfo) {
                     GlobalVarInfo globalTypedVarSymbolInfo = (GlobalVarInfo) targetExprSymbolInfo;
@@ -1145,17 +1210,182 @@ public class CodeGenImpl extends CodeGenBase {
             return null;
         }
 
+        public Void analyze(ListExpr le)
+        {
+            // _emitSeparator("[[ construct-list", ".");
+            for (int i = 0; i < le.elements.size(); i++)
+            {
+                Expr e = le.elements.get(i);
+                e.dispatch(this);
+                pushTemp(A0, "list-elem", format("construct list element with index= %s", i));
+            }
+
+            bke.emitLI(A0, le.elements.size(), "get list's size");
+            pushTemp(A0, "list-size", format("push list size (=%d) to stack", le.elements.size()));
+            int token = shrinkTopStackTo(curTemp, format("Shrink top of stack before calling `conslist`"));
+            // pushTempTopStackAligned(A0, "size", "store size to stack");
+            // for (int i = le.elements.size() - 1; i >= 0; i--)
+            // {
+            //     // Expr e = le.elements.get(i);
+            //     // e.dispatch(this);
+            //     pushTempTopStackAligned(A0, format("%d-th elem", i), format("push element %d-th to temp-stack", i));
+            // }
+            bke.emitJAL(consListLabel, "construct list");
+            inflateStack(token, "inflate stack");
+            popNTemps(1 + le.elements.size(), "Pop temporaries");
+            // _emitSeparator("construct-list ]]", ".");
+            return null;
+        }
+
+        public Void analyze(IndexExpr e)
+        {
+            return addressIndexExpr(e, ie ->
+            {
+                if (e.list.getInferredType().isListType())
+                {
+                    ValueType ty = ie.list.getInferredType().elementType();
+                    if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
+                    // these types are unboxed so load value directly
+                    {
+                        bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
+                    } else {
+                        assert (false);
+                    }
+                }
+            }) ;
+        }
+
+        public Void analyze(ForStmt fs)
+        {
+            Label fl = generateLocalLabel();
+            Label endLoop = generateLocalLabel();
+            Label notNone = generateLocalLabel();
+            // t1 = idx, t0 = list-ptr
+            bke.emitMV(T1, ZERO, "initialize for-loop index");
+            int idx = pushTemp(T1, "idx", "push idx to temp-stack");
+            fs.iterable.dispatch(this);
+            bke.emitBNEZ(A0, notNone, "Ensure not none");
+            bke.emitJ(errorNone, "Go to None error handler");
+            bke.emitLocalLabel(notNone, "Not None");
+            int vec = pushTemp(A0, fs.iterable.getInferredType().toString(), "push iterable to temp-stack") ;
+
+            // for-loop:
+            bke.emitLocalLabel(fl, "for-loop header");
+            loadTempToReg(T0, vec, "pop iterable to t0");
+            loadTempToReg(T1, idx, "peek index in temp-stack");
+
+            bke.emitLW(T2, T0, getAttrOffset(listClass, "__len__"), "get attr __len__");
+            bke.emitBGEU(T1, T2, endLoop, "end loop if idx >= len(iter)");
+            // if not, continue
+            bke.emitADDI(T1, T1, 1, "++idx");
+            storeTempFromReg(T1, idx, "store index on temp-stack");
+
+            if (fs.iterable.getInferredType().isListType())
+            {
+                bke.emitADDI(T1, T1, listHeaderWords - 1,
+                        "Compute list element offset in words (n - 1 because 1-based index)");
+                bke.emitSLLI(T1, T1, 2, "Compute list element offset in bytes");
+                bke.emitADD(T1, T0, T1, "t1 = ptr-to-indexed-element");
+                bke.emitLW(T0, T1, 0, "t0 = value-at-index");
+            }
+            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
+            {
+                bke.emitADDI(T1, T1, -1, null);
+                bke.emitADDI(T1, T1, (strHeaderWords) * backend.getWordSize(),
+                        "Convert index to offset to char in bytes");
+                bke.emitADD(T1, T0, T1, "Get pointer to char");
+                bke.emitLBU(T1, T1, 0, "Load character");
+
+                bke.emitLI(T0, 20, "????"); // TODO: explain this
+                bke.emitMUL(T1, T1, T0, "t1 = t1 * 20;; Multiply by size of string object");
+                bke.emitLA(T0, charTable, "Index into single-char table");
+                bke.emitADD(T0, T0, T1, "t0 = pointer-to-specific-string-in-char-table");
+            }
+            else
+            {
+                throw new IllegalArgumentException("should be unreachable");
+            }
+            // t0 = value-at-idx; t1 = ptr-to-index-elem
+
+            // assign to it var
+            SymbolInfo si = sym.get(fs.identifier.name);
+            if ( fs.identifier.getInferredType().equals(Type.INT_TYPE)
+                    || fs.identifier.getInferredType().equals(Type.BOOL_TYPE) )
+            { // unboxed
+                if (si instanceof GlobalVarInfo)
+                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1,
+                            format("store t0 into global `%s`", fs.identifier.name));
+                else
+                {
+                    bke.emitMV(T2, FP, "t2 = fp");
+                    walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
+                            (bke, r1, r2, i, cmnt) -> {
+                                bke.emitSW(r1, r2, i, cmnt);
+                                return null;
+                            });
+                }
+            }
+            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
+            {
+                if (si instanceof GlobalVarInfo)
+                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1, null);
+            }
+            else
+            {
+                // fs.identifier.dispatch(this);
+                // bke.emitSW(T0, A0, 0,
+                //         format("make loop-var `%s` points to element t0", fs.identifier.name));
+                bke.emitMV(T2, FP, "t2 = fp");
+                walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
+                        (bke, r1, r2, i, cmnt) -> {
+                            bke.emitSW(r1, r2, i, cmnt);
+                            return null;
+                        });
+            }
+
+            // potential function invocations.
+            fs.body.forEach(s -> s.dispatch(this));
+
+            bke.emitJ(fl, "for-loop footer"); // goto for-loop:
+
+            // exit-loop:
+            bke.emitLocalLabel(endLoop, "end loop");
+
+            popNTemps(2, "pop iterable + idx");
+            return null;
+        }
+
         /* PRIVATE HELPER METHODS */
-        private void wrapInteger() {
+        protected void wrapInteger() {
             backend.emitInsn("jal wrapInteger", null);
         }
 
-        private void wrapBoolean() {
+        protected void wrapBoolean() {
             backend.emitInsn("jal wrapBoolean", null);
         }
 
-        private void concatStrs() {
+        protected void concatStrs() {
             backend.emitInsn("jal strCat", null);
+        }
+
+        protected void box(Expr targetExpr, Expr value) {
+            //box if value is of type int or bool and target type is object
+            if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                    value.getInferredType().equals(Type.INT_TYPE))
+            {
+                wrapInteger();
+            }
+
+            if (targetExpr.getInferredType().equals(Type.OBJECT_TYPE) &&
+                    value.getInferredType().equals(Type.BOOL_TYPE)) {
+                wrapBoolean();
+            }
+        }
+        protected int getObjectAttributeOffsetInWords(String objectName, String attributeName) {
+            ClassInfo meObjectClassInfo = (ClassInfo) sym.get(objectName);
+            int attributeStartingOffset = 3 * backend.getWordSize();
+            int attributeIndex = meObjectClassInfo.getAttributeIndex(attributeName);
+            return attributeStartingOffset + (attributeIndex * backend.getWordSize());
         }
 
         public List<SimpleEntry<RiscVBackend.Register, Integer>>
@@ -1240,33 +1470,6 @@ public class CodeGenImpl extends CodeGenBase {
             return oldcurtemp;
         }
 
-        public Void analyze(ListExpr le)
-        {
-            // _emitSeparator("[[ construct-list", ".");
-            for (int i = 0; i < le.elements.size(); i++)
-            {
-                Expr e = le.elements.get(i);
-                e.dispatch(this);
-                pushTemp(A0, "list-elem", format("construct list element with index= %s", i));
-            }
-
-            bke.emitLI(A0, le.elements.size(), "get list's size");
-            pushTemp(A0, "list-size", format("push list size (=%d) to stack", le.elements.size()));
-            int token = shrinkTopStackTo(curTemp, format("Shrink top of stack before calling `conslist`"));
-            // pushTempTopStackAligned(A0, "size", "store size to stack");
-            // for (int i = le.elements.size() - 1; i >= 0; i--)
-            // {
-            //     // Expr e = le.elements.get(i);
-            //     // e.dispatch(this);
-            //     pushTempTopStackAligned(A0, format("%d-th elem", i), format("push element %d-th to temp-stack", i));
-            // }
-            bke.emitJAL(consListLabel, "construct list");
-            inflateStack(token, "inflate stack");
-            popNTemps(1 + le.elements.size(), "Pop temporaries");
-            // _emitSeparator("construct-list ]]", ".");
-            return null;
-        }
-
         // within opAddr, the following are true
         // A1 = list_ptr; A0 = ptr-to-indexed-elem; T0 = attr __len__;
         protected Void addressIndexExpr(IndexExpr ie, Consumer<IndexExpr> opAddr)
@@ -1292,15 +1495,34 @@ public class CodeGenImpl extends CodeGenBase {
 
             // not_none:
             bke.emitLocalLabel(notNone, "Not none");
-            bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "get attribute __len__");
+
+            //The same? Since the length is the first attribute in the object prototype?
+            if (ie.list.getInferredType().equals(Type.STR_TYPE)) {
+                bke.emitLW(T0, A1, getAttrOffset(strClass, "__len__"), "get attribute __len__ for str");
+            } else {
+                bke.emitLW(T0, A1, getAttrOffset(listClass, "__len__"), "get attribute __len__ for list");
+            }
+
             bke.emitBLTU(A0, T0, withinBound, "Index within bound");
             bke.emitJ(errorOob, "Go to OOB error handler");
 
             // within_bound:
             bke.emitLocalLabel(withinBound, "Index within bound");
-            bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
-            bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
-            bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
+
+            if (ie.list.getInferredType().equals(Type.STR_TYPE)) {
+                //If indexing into to a string
+                bke.emitADDI(T0, A0, 16, "Index to offset to char in bytes");
+                bke.emitADD(T0, A1, T0, "Get pointer to char");
+                bke.emitLBU(T0, T0, 0, "Load char");
+                bke.emitLI(T1, 20, null);
+                bke.emitMUL(T0, T0, T1, "Multiply by size of string object (Not sure why we multiply the char by 20)");
+                bke.emitLA(A0, charTable, "Index into char table");
+                bke.emitADD(A0, A0, T0, null);
+            } else {
+                bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
+                bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
+                bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
+            }
 
             // A1 = list_ptr; A0 = ptr-to-first-elem; T0 = attr __len__;
             // invoke op
@@ -1308,124 +1530,6 @@ public class CodeGenImpl extends CodeGenBase {
 
             // popNTemps(1, "Pop temp");
 
-            return null;
-        }
-
-        public Void analyze(IndexExpr e)
-        {
-            return addressIndexExpr(e, ie ->
-            {
-                if (e.list.getInferredType().isListType())
-                {
-                    ValueType ty = ie.list.getInferredType().elementType();
-                    if (ty.equals(Type.INT_TYPE) || ty.equals(Type.BOOL_TYPE))
-                    // these types are unboxed so load value directly
-                    {
-                        bke.emitLW(A0, A0, 0, "A0 = *ptr-to-first-elem");
-                    } else {
-                        assert (false);
-                    }
-                }
-            }) ;
-        }
-
-        public Void analyze(ForStmt fs)
-        {
-            Label fl = generateLocalLabel();
-            Label endLoop = generateLocalLabel();
-            Label notNone = generateLocalLabel();
-            // t1 = idx, t0 = list-ptr
-            bke.emitMV(T1, ZERO, "initialize for-loop index");
-            int idx = pushTemp(T1, "idx", "push idx to temp-stack");
-            fs.iterable.dispatch(this);
-            bke.emitBNEZ(A0, notNone, "Ensure not none");
-            bke.emitJ(errorNone, "Go to None error handler");
-            bke.emitLocalLabel(notNone, "Not None");
-            int vec = pushTemp(A0, fs.iterable.getInferredType().toString(), "push iterable to temp-stack") ;
-
-            // for-loop:
-            bke.emitLocalLabel(fl, "for-loop header");
-            loadTempToReg(T0, vec, "pop iterable to t0");
-            loadTempToReg(T1, idx, "peek index in temp-stack");
-
-            bke.emitLW(T2, T0, getAttrOffset(listClass, "__len__"), "get attr __len__");
-            bke.emitBGEU(T1, T2, endLoop, "end loop if idx >= len(iter)");
-            // if not, continue
-            bke.emitADDI(T1, T1, 1, "++idx");
-            storeTempFromReg(T1, idx, "store index on temp-stack");
-
-            if (fs.iterable.getInferredType().isListType())
-            {
-                bke.emitADDI(T1, T1, listHeaderWords - 1,
-                        "Compute list element offset in words (n - 1 because 1-based index)");
-                bke.emitSLLI(T1, T1, 2, "Compute list element offset in bytes");
-                bke.emitADD(T1, T0, T1, "t1 = ptr-to-indexed-element");
-                bke.emitLW(T0, T1, 0, "t0 = value-at-index");
-            }
-            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
-            {
-                bke.emitADDI(T1, T1, -1, null);
-                bke.emitADDI(T1, T1, (strHeaderWords) * backend.getWordSize(),
-                        "Convert index to offset to char in bytes");
-                bke.emitADD(T1, T0, T1, "Get pointer to char");
-                bke.emitLBU(T1, T1, 0, "Load character");
-
-                bke.emitLI(T0, 20, "????"); // TODO: explain this
-                bke.emitMUL(T1, T1, T0, "t1 = t1 * 20;; Multiply by size of string object");
-                bke.emitLA(T0, charTable, "Index into single-char table");
-                bke.emitADD(T0, T0, T1, "t0 = pointer-to-specific-string-in-char-table");
-            }
-            else
-            {
-                throw new IllegalArgumentException("should be unreachable");
-            }
-            // t0 = value-at-idx; t1 = ptr-to-index-elem
-
-            // assign to it var
-            SymbolInfo si = sym.get(fs.identifier.name);
-            if ( fs.identifier.getInferredType().equals(Type.INT_TYPE)
-                || fs.identifier.getInferredType().equals(Type.BOOL_TYPE) )
-            { // unboxed
-                if (si instanceof GlobalVarInfo)
-                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1,
-                            format("store t0 into global `%s`", fs.identifier.name));
-                else
-                {
-                    bke.emitMV(T2, FP, "t2 = fp");
-                    walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
-                            (bke, r1, r2, i, cmnt) -> {
-                                bke.emitSW(r1, r2, i, cmnt);
-                                return null;
-                            });
-                }
-            }
-            else if (fs.iterable.getInferredType().equals(Type.STR_TYPE))
-            {
-                if (si instanceof GlobalVarInfo)
-                    bke.emitSW(T0, ((GlobalVarInfo) si).getLabel(), T1, null);
-            }
-            else
-            {
-                // fs.identifier.dispatch(this);
-                // bke.emitSW(T0, A0, 0,
-                //         format("make loop-var `%s` points to element t0", fs.identifier.name));
-                bke.emitMV(T2, FP, "t2 = fp");
-                walkAndFindOffsetOfId(funcInfo, fs.identifier, T2, T0, "",
-                        (bke, r1, r2, i, cmnt) -> {
-                            bke.emitSW(r1, r2, i, cmnt);
-                            return null;
-                        });
-            }
-
-            // potential function invocations.
-            fs.body.forEach(s -> s.dispatch(this));
-
-            bke.emitJ(fl, "for-loop footer"); // goto for-loop:
-
-            // exit-loop:
-            bke.emitLocalLabel(endLoop, "end loop");
-
-            popNTemps(2, "pop iterable + idx");
             return null;
         }
     }
