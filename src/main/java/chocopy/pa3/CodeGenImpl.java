@@ -1033,6 +1033,7 @@ public class CodeGenImpl extends CodeGenBase {
                 int tk = shrinkTopStackTo(curTemp, "shrink stack");
                 backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
                 inflateStack(tk, "inflate stack");
+                popNTemps(tempLocs.size(), "popped arguments off temp-stack");
                 // backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
             } else if (ceSymbolInfo instanceof ClassInfo) {
                 //Instantiate new object (new)
