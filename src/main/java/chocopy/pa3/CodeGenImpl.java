@@ -9,6 +9,7 @@ import java.util.AbstractMap.SimpleEntry;
 import chocopy.common.analysis.SymbolTable;
 import chocopy.common.analysis.AbstractNodeAnalyzer;
 import chocopy.common.analysis.types.ClassValueType;
+import chocopy.common.analysis.types.FuncType;
 import chocopy.common.analysis.types.Type;
 import chocopy.common.analysis.types.ValueType;
 import chocopy.common.astnodes.*;
@@ -123,7 +124,7 @@ public class CodeGenImpl extends CodeGenBase {
         //                 .map(s -> s.dispatch(tc))
         //                 .collect(Collectors.toList()));
         // return maxTempsCount;
-        return 20;
+        return 12;
     }
 
     protected int _getFnArSize(FuncInfo fni)
@@ -176,9 +177,6 @@ public class CodeGenImpl extends CodeGenBase {
         if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
         {
             backend.emitMV(A0, ZERO, format("[fn=%s] Returning None implicitly", funcInfo.getFuncName()));
-        }
-        else
-        {
         }
 
         backend.emitJ(stmtAnalyzer.epilogue, format("[fn=%s] jump to epilogue", funcInfo.getFuncName()));
@@ -713,6 +711,10 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitLI(T0, 0, "Load 0 into temp reg");
                     backend.emitSUB(A0, T0, A0, "Negate OR operation to get ADD");
                     break;
+                case "is":
+                    backend.emitXOR(A0, A0, T1, "compare references");
+                    backend.emitSEQZ(A0, A0, "Operator is");
+                    break;
             }
             popNTemps(1, "pop [left-operand]");
             backend.emitLocalLabel(exitBinaryExprLocalLabel, "Exit binary expression local label");
@@ -730,6 +732,12 @@ public class CodeGenImpl extends CodeGenBase {
         public Void analyze(StringLiteral strLit) {
             Label lbl = constants.getStrConstant(strLit.value);
             backend.emitLA(A0, lbl, format("Load string literal: \"%s\"", strLit.value));
+            return null;
+        }
+
+        @Override
+        public Void analyze(NoneLiteral noneLit) {
+            backend.emitMV(A0, ZERO, "Load None");
             return null;
         }
 
@@ -850,11 +858,6 @@ public class CodeGenImpl extends CodeGenBase {
                         int index = funcInfo.getVarIndex(id.name);
                         StackVarInfo vi = (StackVarInfo) funcInfo.getSymbolTable().get(id.name);
 
-                        if (vi.getInitialValue() instanceof NoneLiteral) {
-                            backend.emitMV(A0, ZERO, "load None");
-                            return null;
-                        }
-
                         if (index < funcInfo.getParams().size()) {
                             return loadLocalParamToReg(vi, A0);
                         } else {
@@ -878,11 +881,6 @@ public class CodeGenImpl extends CodeGenBase {
                                 String objectClassName = classInfo.getClassName();
                                 backend.emitLA(A0, classInfo.getPrototypeLabel(), format("get pointer to prototype: %s", objectClassName));
                             } else {
-                                if (svi.getInitialValue() instanceof NoneLiteral) {
-                                    backend.emitMV(A0, ZERO, "load None");
-                                    return null;
-                                }
-
                                 if (varIdx < actualOuterScope.getParams().size()) {
                                     return AsmHelper.loadLocalVarToReg(
                                             backend,
@@ -921,8 +919,6 @@ public class CodeGenImpl extends CodeGenBase {
 
             String idName = id.name;
             SymbolInfo idSymbolInfo = sym.get(idName);
-
-            //TODO: Check for None here as well?
 
             if (idSymbolInfo instanceof GlobalVarInfo) {
                 backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
@@ -967,9 +963,6 @@ public class CodeGenImpl extends CodeGenBase {
                 int methodOffset = meObjectClassInfo.getMethodIndex(memberName) * (backend.getWordSize());
                 backend.emitLA(A0, meObjectClassInfo.getDispatchTableLabel(), format("load %s's dispatch table label into A0", objectName));
                 backend.emitLW(A0, A0, methodOffset, format("load address of method: %s.%s", objectName, memberName));
-                int token = shrinkTopStackTo(curTemp, "shrink stack");
-                backend.emitJALR(A0, format("invoke %s.%s", objectName, memberName));
-                inflateStack(token, "restore stack");
             } else {
                 int attributeOffsetInWords = getObjectAttributeOffsetInWords(objectName, memberName);
                 backend.emitLW(A0, A0, attributeOffsetInWords, format("get attribute %s.%s", objectName, memberName));
@@ -984,6 +977,13 @@ public class CodeGenImpl extends CodeGenBase {
             String functionName = ce.function.name;
             SymbolInfo ceSymbolInfo = sym.get(functionName);
             // TODO:: add logic for method invocation here.
+
+            //Special cases: int and bool unboxed
+            if ((functionName.equals("int") || functionName.equals("bool"))
+                    && ce.args.size() == 0) {
+                backend.emitMV(A0, ZERO, "special cases: int and bool unboxed");
+                return null;
+            }
 
             if (ceSymbolInfo instanceof FuncInfo) {
                 //FUNCTIONS
@@ -1071,12 +1071,42 @@ public class CodeGenImpl extends CodeGenBase {
 
         @Override
         public Void analyze(MethodCallExpr mce) {
-            //Do we need to do more here? Seems too good to be true lol.
-            for (Expr argExpr: mce.args) {
+            List<Integer> tempLocs = new ArrayList<>();
+
+            for (int i = 0; i < mce.args.size(); i++) {
+                Expr argExpr = mce.args.get(i);
                 argExpr.dispatch(this);
+                //TODO: Not quite sure how to approach this? Doesn't really work? 
+//                FuncType ft = (FuncType) mce.getInferredType();
+//                ValueType argType = ft.parameters.get(i);
+//
+//                //Handle "wrapping" integers and booleans
+//                if (argType.equals(Type.OBJECT_TYPE)
+//                        && argExpr.getInferredType().equals(Type.INT_TYPE))
+//                {
+//                    // Call Int Wrapping Code Emitter
+//                    wrapInteger();
+//                }
+//
+//                if (argType.equals(Type.OBJECT_TYPE)
+//                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
+//                {
+//                    // Call Bool Wrapping Code Emitter: Create Bool object
+//                    wrapBoolean();
+//                }
+
+                pushTemp(A0,
+                        format("arg %d-th", i),
+                        format("push arg %d-th to stack", i));
             }
 
             mce.method.dispatch(this);
+
+            int token = shrinkTopStackTo(curTemp, "shrink stack");
+            backend.emitJALR(A0, "invoke method call expr");
+            inflateStack(token, "restore stack");
+            popNTemps(tempLocs.size(), "popped arguments off temp-stack");
+
             return null;
         }
 
