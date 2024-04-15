@@ -762,6 +762,7 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         public Void loadLocalVarToReg(VarInfo svi, RiscVBackend.Register reg) {
+            //Don't think this is correct ???
             int varIdx = funcInfo.getVarIndex(svi.getVarName()) - funcInfo.getParams().size();
             backend.emitLW(reg, FP, -varIdx * backend.getWordSize() - 4,
                     format("[fn=%s] load local VAR `%s: %s` TO reg `%s`",
@@ -847,7 +848,13 @@ public class CodeGenImpl extends CodeGenBase {
                         backend.emitLA(A0, classInfo.getPrototypeLabel(), format("get pointer to prototype: %s", objectClassName));
                     } else {
                         int index = funcInfo.getVarIndex(id.name);
-                        VarInfo vi = (VarInfo) funcInfo.getSymbolTable().get(id.name);
+                        StackVarInfo vi = (StackVarInfo) funcInfo.getSymbolTable().get(id.name);
+
+                        if (vi.getInitialValue() instanceof NoneLiteral) {
+                            backend.emitMV(A0, ZERO, "load None");
+                            return null;
+                        }
+
                         if (index < funcInfo.getParams().size()) {
                             return loadLocalParamToReg(vi, A0);
                         } else {
@@ -866,23 +873,33 @@ public class CodeGenImpl extends CodeGenBase {
                             StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(id.name);
                             int varIdx = actualOuterScope.getVarIndex(id.name);
 
-
-                            if (varIdx < actualOuterScope.getParams().size()) {
-                                return AsmHelper.loadLocalVarToReg(
-                                        backend,
-                                        actualOuterScope,
-                                        varIdx,
-                                        T0,
-                                        A0,
-                                        "Load param " + svi.getVarName() + " into A0");
+                            if (id.name.equals("self")) {
+                                ClassInfo classInfo = (ClassInfo) sym.get(id.getInferredType().className());
+                                String objectClassName = classInfo.getClassName();
+                                backend.emitLA(A0, classInfo.getPrototypeLabel(), format("get pointer to prototype: %s", objectClassName));
                             } else {
-                                int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
-                                backend.emitLW(A0, T0, offset,
-                                        format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
-                                                actualOuterScope.getFuncName(),
-                                                svi.getVarName(),
-                                                svi.getVarType(),
-                                                "A0"));
+                                if (svi.getInitialValue() instanceof NoneLiteral) {
+                                    backend.emitMV(A0, ZERO, "load None");
+                                    return null;
+                                }
+
+                                if (varIdx < actualOuterScope.getParams().size()) {
+                                    return AsmHelper.loadLocalVarToReg(
+                                            backend,
+                                            actualOuterScope,
+                                            varIdx,
+                                            T0,
+                                            A0,
+                                            "Load param " + svi.getVarName() + " into A0");
+                                } else {
+                                    int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
+                                    backend.emitLW(A0, T0, offset,
+                                            format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
+                                                    actualOuterScope.getFuncName(),
+                                                    svi.getVarName(),
+                                                    svi.getVarType(),
+                                                    "A0"));
+                                }
                             }
                             break;
                         } else {
@@ -904,6 +921,8 @@ public class CodeGenImpl extends CodeGenBase {
 
             String idName = id.name;
             SymbolInfo idSymbolInfo = sym.get(idName);
+
+            //TODO: Check for None here as well?
 
             if (idSymbolInfo instanceof GlobalVarInfo) {
                 backend.emitLW(A0, ((GlobalVarInfo) idSymbolInfo).getLabel(), "Load identifier label into A0");
@@ -970,9 +989,6 @@ public class CodeGenImpl extends CodeGenBase {
                 //FUNCTIONS
                 FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
                 List<String> functionParams = functionInfo.getParams();
-                // int fnArSz = _getFnArSize(funcInfo);
-
-                // int stackGrowth = 0;
 
                 List<Integer> tempLocs = new ArrayList<>();
                 // If the callee is statically nested, first push the `static link`
@@ -981,7 +997,8 @@ public class CodeGenImpl extends CodeGenBase {
                     // Retrieve a static link to the static outer scope.
                     FuncInfo staticOuterScope = functionInfo.getParentFuncInfo();
                     FuncInfo actualOuterScope = funcInfo;
-                    backend.emitMV(T0, FP, format("Configure getting static link to %s", functionInfo.getFuncName()));
+                    backend.emitMV(T0, FP, format("Configure getting static link to %s", staticOuterScope.getFuncName()));
+
                     while (!actualOuterScope.equals(staticOuterScope))
                     {
                         // deference static link
@@ -1034,7 +1051,6 @@ public class CodeGenImpl extends CodeGenBase {
                 backend.emitJAL(functionInfo.getCodeLabel(), "Call function: " + functionName);
                 inflateStack(tk, "inflate stack");
                 popNTemps(tempLocs.size(), "popped arguments off temp-stack");
-                // backend.emitADDI(SP, SP, +stackGrowth * backend.getWordSize(), "Set SP to top of stack");
             } else if (ceSymbolInfo instanceof ClassInfo) {
                 //Instantiate new object (new)
                 ClassInfo ceClassInfo = (ClassInfo) ceSymbolInfo;
@@ -1055,7 +1071,11 @@ public class CodeGenImpl extends CodeGenBase {
 
         @Override
         public Void analyze(MethodCallExpr mce) {
-            //MemberExpr Get back method address location?
+            //Do we need to do more here? Seems too good to be true lol.
+            for (Expr argExpr: mce.args) {
+                argExpr.dispatch(this);
+            }
+
             mce.method.dispatch(this);
             return null;
         }
