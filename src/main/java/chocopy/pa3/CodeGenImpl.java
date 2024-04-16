@@ -163,9 +163,14 @@ public class CodeGenImpl extends CodeGenBase {
         // let's first process locally-init variables
         for (StackVarInfo svi : funcInfo.getLocals()) {
             // int idx = funcInfo.getVarIndex(svi.getVarName());
-            if (svi.getVarType().isSpecialType()) {
+            if (svi.getVarType().isSpecialType())
+            {
                 svi.getInitialValue().dispatch(stmtAnalyzer);
                 stmtAnalyzer.pushRegToLocalVar(A0, svi);
+            }
+            else if (svi.getInitialValue() instanceof NoneLiteral)
+            {
+                stmtAnalyzer.pushRegToLocalVar(ZERO, svi);
             }
         }
 
