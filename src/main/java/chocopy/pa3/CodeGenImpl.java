@@ -1141,24 +1141,6 @@ public class CodeGenImpl extends CodeGenBase {
             {
                 Expr argExpr = mce.args.get(i);
                 argExpr.dispatch(this);
-                // //TODO: Not quite sure how to approach this? Doesn't really work?
-                // // FuncType ft = (FuncType) mce.getInferredType();
-                // // ValueType argType = ft.parameters.get(i);
-
-                // //Handle "wrapping" integers and booleans
-                // if (argType.equals(Type.OBJECT_TYPE)
-                //         && argExpr.getInferredType().equals(Type.INT_TYPE))
-                // {
-                //     // Call Int Wrapping Code Emitter
-                //     wrapInteger();
-                // }
-
-                // if (argType.equals(Type.OBJECT_TYPE)
-                //         && argExpr.getInferredType().equals(Type.BOOL_TYPE))
-                // {
-                //     // Call Bool Wrapping Code Emitter: Create Bool object
-                //     wrapBoolean();
-                // }
 
                 tempLocs.add(pushTemp(A0,
                         format("arg %d-th", i),

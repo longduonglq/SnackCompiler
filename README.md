@@ -88,8 +88,10 @@ git pull upstream master
 
 ## Submission writeup
 
-Team member 1: 
+Team member 1: Justin Wong 
 
-Team member 2: 
+Team member 2: Lucas Duong 
 
-(Students should edit this section with their write-up)
+No outside help or collaboration received. 
+
+No slip hours used.
