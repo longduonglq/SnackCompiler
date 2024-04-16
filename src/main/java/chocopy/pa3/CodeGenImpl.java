@@ -1616,12 +1616,14 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitADD(T0, A1, T0, "Get pointer to char");
                 bke.emitLBU(T0, T0, 0, "Load char");
                 bke.emitLI(T1, 20, null);
-                bke.emitMUL(T0, T0, T1, "Multiply by size of string object (Not sure why we multiply the char by 20)");
+                bke.emitMUL(T0, T0, T1, "Multiply by size of string object");
                 bke.emitLA(A0, charTable, "Index into char table");
                 bke.emitADD(A0, A0, T0, null);
             } else {
                 bke.emitADDI(A0, A0, listHeaderWords, "Compute list element offset in words");
-                bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
+                bke.emitLI(T5, 4, "T5 = 4");
+                // bke.emitSLLI(A0, A0, 2, "List element offset in bytes");
+                bke.emitMUL(A0, T5, A0, "List element offset in bytes");
                 bke.emitADD(A0, A0, A1, "A0 = ptr-to-first-elem");
             }
 
@@ -1686,14 +1688,15 @@ public class CodeGenImpl extends CodeGenBase {
 
         bke.emitLA(A0, charTable, "get ptr to charTable");
         bke.emitLI(T4, 256, null);
-        bke.emitMV(T5, ZERO, "set up idx = 0");
+        // bke.emitMV(T5, ZERO, "set up idx = 0");
+        bke.emitLI(T5, 0, "set up idx = 0");
 
         bke.emitLocalLabel(loop, "loop to create char table");
-        bke.emitSW(T0, A0, 0, "store type tag");
-        bke.emitSW(T1, A0, 4, "store object size");
-        bke.emitSW(T2, A0, 8, "store ptr-to-dispatch-table");
-        bke.emitSW(T3, A0, 12, "store size of string");
         bke.emitSW(T5, A0, 16, "store the character");
+        bke.emitSW(T3, A0, 12, "store size of string");
+        bke.emitSW(T2, A0, 8, "store ptr-to-dispatch-table");
+        bke.emitSW(T1, A0, 4, "store object size");
+        bke.emitSW(T0, A0, 0, "store type tag");
 
         bke.emitADDI(A0, A0, 20, "jumps to the next location to store character");
         bke.emitADDI(T5, T5, 1, "char = char + 1");
@@ -1830,7 +1833,9 @@ public class CodeGenImpl extends CodeGenBase {
         // A0 = heap_ptr; T0 = size
         bke.emitLW(T0, FP, 0, "t0 = len");
         bke.emitSW(T0, A0, getAttrOffset(listClass, "__len__"), "store length attr to list on heap");
-        bke.emitSLLI(T1, T0, 2, "t1 = size (in bytes) of list in memory");
+        // bke.emitSLLI(T1, T0, 2, "t1 = size (in bytes) of list in memory");
+        bke.emitLI(T1, 4, "word to bytes conversion");
+        bke.emitMUL(T1, T0, T1, "t1 = size (in bytes)  of list in mem");
         bke.emitADD(T1, T1, FP, "t1 now points to start of stack-list");
         bke.emitADDI(T2, A0, D__elts__, "t2 points to first array element");
         // t1 = stack-arr; t2 = heap-arr;

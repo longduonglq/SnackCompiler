@@ -17,8 +17,10 @@
   .equiv @error_none, 4
   .equiv @error_oom, 5
   .equiv @error_nyi, 6
-  .equiv @boolTRUE, const_1
-  .equiv @boolFALSE, const_0
+  .equiv @listHeaderWords, 4
+  .equiv @strHeaderWords, 4
+  .equiv @bool.True, const_1
+  .equiv @bool.False, const_0
 
 .data
 
@@ -98,205 +100,141 @@ main:
   add s11, s10, s11                        # Set end of heap (= start of heap + heap size)
   mv ra, zero                              # No normal return from main program.
   mv fp, zero                              # No preceding frame.
-  addi sp, sp, -224                        # Saved FP and saved RA (unused at top level).
-  sw ra, 52(sp)                            # [fn=main] Save return address.
-  sw fp, 48(sp)                            # [fn=main] Save control link.
-  sw zero, 0(sp)                           # Top saved FP is 0.
-  sw zero, 4(sp)                           # Top saved RA is 0.
-  addi fp, sp, 224                         # Set FP to previous SP.
-  jal createSmallCharTable                 # create one-character string table
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_1:                                   # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  beq a0, t1, label_3                      # ==: Compare if A0 & T1 are equal
-  li a0, 0                                 # Set A0 to be False (0)
-  j label_4                                # Jump to exit local label
-label_3:                                   # Equal Local Label
-  li a0, 1                                 # Set A0 to be True (1)
-label_4:                                   # Exit Local Label
-label_2:                                   # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_5:                                   # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  beq a0, t1, label_7                      # !=: Compare if A0 & T1 are equal
-  li a0, 1                                 # Set A0 to be True (1)
-  j label_8                                # Jump to exit local label
-label_7:                                   # Equal local label
-  li a0, 0                                 # Set A0 to be False (0)
-label_8:                                   # Exit local label
-label_6:                                   # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_9:                                   # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  sub a0, t1, a0                           # <: Subtract A0 (Right) from T1 (Left)
-  li t2, 0                                 # Load 0 into temp reg
-  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 0 else 1
-label_10:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_11:                                  # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  bge a0, t1, label_13                     # <=: Compare if T1 <= A0
-  li a0, 0                                 # A0 is NOT greater than T1, Set A0 to False (0)
-  j label_14                               # Jump to exit local label
-label_13:                                  # Less than or equal to local label
-  li a0, 1                                 # A0 is greater than T1, Set A0 to True (1)
-label_14:                                  # Exit local label
-label_12:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_15:                                  # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  sub a0, a0, t1                           # >: Subtract T1 (Left) from A0 (Right)
-  li t2, 0                                 # Load 0 into temp reg
-  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 0 else 1
-label_16:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_17:                                  # Evaluate OR second expression
-  lw a0, $y                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  bge t1, a0, label_19                     # >=: Compare if T1 >= A0
-  li a0, 0                                 # T1 is NOT greater than A0, Set A0 to False (0)
-  j label_20                               # Jump to exit local label
-label_19::
-  li a0, 1                                 # T1 is greater than A0, Set A0 to True (1)
-label_20:                                  # Exit local label
-label_18:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_21:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  beq a0, t1, label_23                     # ==: Compare if A0 & T1 are equal
-  li a0, 0                                 # Set A0 to be False (0)
-  j label_24                               # Jump to exit local label
-label_23:                                  # Equal Local Label
-  li a0, 1                                 # Set A0 to be True (1)
-label_24:                                  # Exit Local Label
-label_22:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_25:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  beq a0, t1, label_27                     # !=: Compare if A0 & T1 are equal
-  li a0, 1                                 # Set A0 to be True (1)
-  j label_28                               # Jump to exit local label
-label_27:                                  # Equal local label
-  li a0, 0                                 # Set A0 to be False (0)
-label_28:                                  # Exit local label
-label_26:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_29:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  sub a0, t1, a0                           # <: Subtract A0 (Right) from T1 (Left)
-  li t2, 0                                 # Load 0 into temp reg
-  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 0 else 1
-label_30:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_31:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  bge a0, t1, label_33                     # <=: Compare if T1 <= A0
-  li a0, 0                                 # A0 is NOT greater than T1, Set A0 to False (0)
-  j label_34                               # Jump to exit local label
-label_33:                                  # Less than or equal to local label
-  li a0, 1                                 # A0 is greater than T1, Set A0 to True (1)
-label_34:                                  # Exit local label
-label_32:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_35:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  sub a0, a0, t1                           # >: Subtract T1 (Left) from A0 (Right)
-  li t2, 0                                 # Load 0 into temp reg
-  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 0 else 1
-label_36:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
-  lw a0, $x                                # Load identifier label into A0
-  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
-label_37:                                  # Evaluate OR second expression
-  lw a0, $x                                # Load identifier label into A0
-  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
-  bge t1, a0, label_39                     # >=: Compare if T1 >= A0
-  li a0, 0                                 # T1 is NOT greater than A0, Set A0 to False (0)
-  j label_40                               # Jump to exit local label
-label_39::
-  li a0, 1                                 # T1 is greater than A0, Set A0 to True (1)
-label_40:                                  # Exit local label
-label_38:                                  # Exit binary expression local label
-  jal wrapBoolean
-  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
-  addi sp, sp, 44                          # [deflate-stack] shrink stack
-  jal $print                               # Call function: print
-  addi sp, sp, -44                         # [inflate-stack] inflate stack
+  addi sp, sp, -@..main.size               # Reserve space for stack frame.
+  sw ra, @..main.size-4(sp)                # return address
+  sw fp, @..main.size-8(sp)                # control link
+  addi fp, sp, @..main.size                # New fp is at old SP.
+  jal initchars                            # Initialize one-character strings.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  xor a0, t0, a0                           # Operator ==
+  seqz a0, a0                              # Operator == (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  xor a0, t0, a0                           # Operator !=
+  snez a0, a0                              # Operator != (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, t0, a0                           # Operator <
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, a0, t0                           # Operator <=
+  seqz a0, a0                              # Operator <= (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, a0, t0                           # Operator >
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $y                                # Load global: y
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, t0, a0                           # Operator >=
+  seqz a0, a0                              # Operator >= (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  xor a0, t0, a0                           # Operator ==
+  seqz a0, a0                              # Operator == (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  xor a0, t0, a0                           # Operator !=
+  snez a0, a0                              # Operator != (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, t0, a0                           # Operator <
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, a0, t0                           # Operator <=
+  seqz a0, a0                              # Operator <= (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, a0, t0                           # Operator >
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  lw a0, $x                                # Load global: x
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, $x                                # Load global: x
+  lw t0, -20(fp)                           # Pop stack slot 5
+  slt a0, t0, a0                           # Operator >=
+  seqz a0, a0                              # Operator >= (..contd)
+  jal makebool                             # Box boolean
+  sw a0, -16(fp)                           # Push argument 0 from last.
+  addi sp, fp, -16                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  .equiv @..main.size, 32
+label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
   ecall
 
@@ -487,6 +425,263 @@ heap.init:
   ecall                                    # Request A1 bytes
   jr ra                                    # Return to caller
 
+.globl concat
+concat:
+
+        addi sp, sp, -32
+        sw ra, 28(sp)
+        sw fp, 24(sp)
+        addi fp, sp, 32
+	sw s1, -12(fp)
+        sw s2, -16(fp)
+        sw s3, -20(fp)
+	sw s4, -24(fp)
+        sw s5, -28(fp)
+        lw t0, 4(fp)
+        lw t1, 0(fp)
+        beqz t0, concat_none
+        beqz t1, concat_none
+        lw t0, @.__len__(t0)
+        lw t1, @.__len__(t1)
+        add s5, t0, t1
+        addi a1, s5, @listHeaderWords
+        la a0, $.list$prototype
+        jal alloc2
+        sw s5, @.__len__(a0)
+	mv s5, a0
+        addi s3, s5, @.__elts__
+        lw s1, 4(fp)
+	lw s2, @.__len__(s1)
+        addi s1, s1, @.__elts__
+	lw s4, 12(fp)
+concat_1:
+        beqz s2, concat_2
+        lw a0, 0(s1)
+	jalr ra, s4, 0
+        sw a0, 0(s3)
+        addi s2, s2, -1
+        addi s1, s1, 4
+        addi s3, s3, 4
+        j concat_1
+concat_2:
+        lw s1, 0(fp)
+        lw s2, @.__len__(s1)
+        addi s1, s1, @.__elts__
+	lw s4, 8(fp)
+concat_3:
+        beqz s2, concat_4
+        lw a0, 0(s1)
+	jalr ra, s4, 0
+        sw a0, 0(s3)
+        addi s2, s2, -1
+        addi s1, s1, 4
+        addi s3, s3, 4
+        j concat_3
+concat_4:
+	mv a0, s5
+        lw s1, -12(fp)
+        lw s2, -16(fp)
+        lw s3, -20(fp)
+	lw s4, -24(fp)
+        lw s5, -28(fp)
+        lw ra, -4(fp)
+        lw fp, -8(fp)
+        addi sp, sp, 32
+        jr ra
+concat_none:
+        j error.None
+
+
+.globl conslist
+conslist:
+
+        addi sp, sp, -8
+        sw ra, 4(sp)
+        sw fp, 0(sp)
+        addi fp, sp, 8
+        lw a1, 0(fp)
+        la a0, $.list$prototype
+        beqz a1, conslist_done
+        addi a1, a1, @listHeaderWords
+        jal alloc2
+        lw t0, 0(fp)
+        sw t0, @.__len__(a0)
+        slli t1, t0, 2
+        add t1, t1, fp
+        addi t2, a0, @.__elts__
+conslist_1:
+        lw t3, 0(t1)
+        sw t3, 0(t2)
+        addi t1, t1, -4
+        addi t2, t2, 4
+        addi t0, t0, -1
+        bnez t0, conslist_1
+conslist_done:
+        lw ra, -4(fp)
+        lw fp, -8(fp)
+        addi sp, sp, 8
+        jr ra
+
+
+.globl strcat
+strcat:
+
+        addi sp, sp, -12
+        sw ra, 8(sp)
+        sw fp, 4(sp)
+        addi fp, sp, 12
+        lw t0, 4(fp)
+        lw t1, 0(fp)
+        lw t0, @.__len__(t0)
+        beqz t0, strcat_4
+        lw t1, @.__len__(t1)
+        beqz t1, strcat_5
+        add t1, t0, t1
+        sw t1, -12(fp)
+        addi t1, t1, 4
+        srli t1, t1, 2
+        addi a1, t1, @listHeaderWords
+        la a0, $str$prototype
+        jal alloc2
+        lw t0, -12(fp)
+        sw t0, @.__len__(a0)
+        addi t2, a0, 16
+        lw t0, 4(fp)
+        lw t1, @.__len__(t0)
+        addi t0, t0, @.__str__
+strcat_1:
+        beqz t1, strcat_2
+        lbu t3, 0(t0)
+        sb t3, 0(t2)
+        addi t1, t1, -1
+        addi t0, t0, 1
+        addi t2, t2, 1
+        j strcat_1
+strcat_2:
+        lw t0, 0(fp)
+        lw t1, 12(t0)
+        addi t0, t0, 16
+strcat_3:
+        beqz t1, strcat_6
+        lbu t3, 0(t0)
+        sb t3, 0(t2)
+        addi t1, t1, -1
+        addi t0, t0, 1
+        addi t2, t2, 1
+        j strcat_3
+strcat_4:
+        lw a0, 0(fp)
+        j strcat_7
+strcat_5:
+        lw a0, 4(fp)
+        j strcat_7
+strcat_6:
+        sb zero, 0(t2)
+strcat_7:
+        lw ra, -4(fp)
+        lw fp, -8(fp)
+        addi sp, sp, 12
+        jr ra
+
+
+.globl streql
+streql:
+
+        addi sp, sp, -8
+        sw ra, 4(sp)
+        sw fp, 0(sp)
+        addi fp, sp, 8
+        lw a1, 4(fp)
+        lw a2, 0(fp)
+        lw t0, @.__len__(a1)
+        lw t1, @.__len__(a2)
+        bne t0, t1, streql_no
+streql_1:
+        lbu t2, @.__str__(a1)
+        lbu t3, @.__str__(a2)
+        bne t2, t3, streql_no
+        addi a1, a1, 1
+        addi a2, a2, 1
+        addi t0, t0, -1
+        bgtz t0, streql_1
+        li a0, 1
+        j streql_end
+streql_no:
+        xor a0, a0, a0
+streql_end:
+        lw ra, -4(fp)
+        lw fp, -8(fp)
+        addi sp, sp, 8
+        jr ra
+
+
+.globl strneql
+strneql:
+
+        addi sp, sp, -8
+        sw ra, 4(sp)
+        sw fp, 0(sp)
+        addi fp, sp, 8
+        lw a1, 4(fp)
+        lw a2, 0(fp)
+        lw t0, @.__len__(a1)
+        lw t1, @.__len__(a2)
+        bne t0, t1, strneql_yes
+strneql_1:
+        lbu t2, @.__str__(a1)
+        lbu t3, @.__str__(a2)
+        bne t2, t3, strneql_yes
+        addi a1, a1, 1
+        addi a2, a2, 1
+        addi t0, t0, -1
+        bgtz t0, strneql_1
+        xor a0, a0, a0
+        j strneql_end
+strneql_yes:
+        li a0, 1
+strneql_end:
+        lw ra, -4(fp)
+        lw fp, -8(fp)
+        addi sp, sp, 8
+        jr ra
+
+
+.globl makeint
+makeint:
+
+        addi sp, sp, -8
+        sw ra, 4(sp)
+        sw a0, 0(sp)
+        la a0, $int$prototype
+        jal ra, alloc
+        lw t0, 0(sp)
+        sw t0, @.__int__(a0)
+        lw ra, 4(sp)
+        addi sp, sp, 8
+        jr ra
+
+
+.globl makebool
+makebool:
+
+	slli a0, a0, 4
+        la t0, @bool.False
+        add a0, a0, t0
+	jr ra
+
+
+.globl noconv
+noconv:
+
+        jr ra
+
+
+.globl initchars
+initchars:
+
+        jr ra
+
+
 .globl error.None
 error.None:
   li a0, 4                                 # Exit code for: Operation on None
@@ -507,210 +702,6 @@ error.OOB:
   la a1, const_8                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
-
-.globl wrapInteger
-wrapInteger:
-  addi sp, sp, -8
-  sw ra, 0(sp)
-  sw a0, 4(sp)
-  la a0, $int$prototype
-  jal alloc
-  lw t0, 4(sp)
-  sw t0, 12(a0)
-  lw ra, 0(sp)
-  addi sp, sp, 8
-  jr ra
-
-.globl wrapBoolean
-wrapBoolean:
-  li t0, 1                                 # Load True into temp reg for comparison
-  beq a0, t0, label_41                     # Check which boolean branch to go to
-  la a0, const_0                           # Load False constant's address into A0
-  jr ra                                    # Go back
-label_41:                                  # Label for true branch
-  la a0, const_1                           # Load True constant's address into A0
-  jr ra                                    # Go back
-
-.globl concatenateList
-concatenateList:
-  addi sp, sp, -72                         # Reserve space for stack frame
-  sw ra, 68(sp)                            # Save return address.
-  sw fp, 64(sp)                            # Save control link.
-  addi fp, sp, 72                          # `fp` is at old `sp`.
-  sw s1, 60(sp)                            # backup registers s1->s5
-  sw s2, 56(sp)                            # backup registers s1->s5
-  sw s3, 52(sp)                            # backup registers s1->s5
-  sw s4, 48(sp)                            # backup registers s1->s5
-  sw s5, 44(sp)                            # backup registers s1->s5
-  #..................................................( Compute sum of list lengths and then allocate ).................................................. # 
-  lw t0, 4(fp)                             # t0 = arg1
-  lw t1, 0(fp)                             # t1 = arg2
-  beqz t0, label_42                        # asserts t0 not None
-  beqz t1, label_42                        # asserts t1 not None
-  lw t0, 12(t0)                            # t0 = t0.__len__
-  lw t1, 12(t1)                            # t1 = t1.__len__
-  add s5, t0, t1                           # s5 = arg1.len + arg2.len
-  addi a1, s5, 4                           # reserve space for header and load sum into A1 to prep for alloc2
-  la a0, $.list$prototype                  # A0 = list-prototype (for alloc2)
-  jal alloc2                               # allocate new list
-  #__________________________________________________( initialize newly created array )__________________________________________________ # 
-  sw s5, 12(a0)                            # initialize new list's size
-  mv s5, a0                                # s5 = heap-ptr
-  addi s3, s5, 16                          # s3 = heap-ptr + offset-to-first-element
-  lw s1, 4(fp)                             # s1 = arg1
-  lw s2, 12(s1)                            # s2 = arg1.len
-  #..................................................( Copy arg1 into allocated list ).................................................. # 
-  addi s1, s1, 16                          # s1 = &arg1[0]
-label_44:                                  # copy arg1 to destination
-  beqz s2, label_46                        # loop when s2 > 0; else start initialize the copying of arg2
-  lw a0, 0(s1)                             # a0 = arg1[0]
-  sw a0, 0(s3)                             # *ptr-to-first-elem = a0
-  addi s2, s2, -1                          # decrement index s2 = (arg1.len ... 1)
-  addi s1, s1, 4                           # advance to next element of arg1
-  addi s3, s3, 4                           # ptr-to-first-elem += 4
-  j label_44                               # continue loop
-label_46:                                  # preparing to copy arg2
-  lw s1, 0(fp)                             # s1 = arg2
-  lw s2, 12(s1)                            # s2 = arg2.len
-  addi s1, s1, 16                          # s1 = &arg2[0]
-  #..................................................( Copy arg2 into allocated list ).................................................. # 
-label_45:                                  # copy arg2
-  beqz s2, label_43                        # when done copying, go to epilogue
-  lw a0, 0(s1)                             # a0 = arg2[0]
-  sw a0, 0(s3)                             # *ptr-to-first-element = arg2[0]
-  addi s2, s2, -1                          # remaining elements -= 1
-  addi s1, s1, 4                           # advance to next element of arg2
-  addi s3, s3, 4                           # ptr-to-first-element += 4
-  j label_45                               # loop
-label_43:                                  # cleanup
-  mv a0, s5                                # ret = heap-ptr
-  lw s5, 44(sp)                            # restore registers s1 -> s5
-  lw s4, 48(sp)                            # restore registers s1 -> s5
-  lw s3, 52(sp)                            # restore registers s1 -> s5
-  lw s2, 56(sp)                            # restore registers s1 -> s5
-  lw s1, 60(sp)                            # restore registers s1 -> s5
-  lw ra, -4(fp)                            # get return addr
-  lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, 72                          # restore stack ptr
-  jr ra                                    # return to caller
-label_42:                                  # concat_none:
-  j error.None                             # 
-
-.globl constructList
-constructList:
-  addi sp, sp, -8
-  sw ra, 4(sp)
-  sw fp, 0(sp)
-  addi fp, sp, 8                           # fp is old sp
-  lw a1, 0(fp)                             # Get list size
-  la a0, $.list$prototype                  # Get list prototype for alloc2
-  beqz a1, conslist_done                   # If list empty, then we done.
-  addi a1, a1, 4                           # Allocate sz + 4 to store elements and headers
-  jal alloc2                               # Allocate space for list on heap
-  lw t0, 0(fp)                             # t0 = len
-  sw t0, 12(a0)                            # store length attr to list on heap
-  slli t1, t0, 2                           # t1 = size (in bytes) of list in memory
-  add t1, t1, fp                           # t1 now points to start of stack-list
-  addi t2, a0, 16                          # t2 points to first array element
-conslist_1:                                # copying contents from stack-list to heap-list
-  lw t3, 0(t1)                             # t3 = stack-arr[0]
-  sw t3, 0(t2)                             # heap-arr[0] = t3
-  addi t1, t1, -4                          # stack-arr -= 4
-  addi t2, t2, 4                           # heap-arr += 4
-  addi t0, t0, -1                          # size -= 1
-  bnez t0, conslist_1                      # if there are still element to be copy, keep copying.
-conslist_done:                             # just finishing up
-  lw ra, -4(fp)
-  lw fp, -8(fp)
-  addi sp, sp, 8
-  jr ra
-
-.globl createSmallCharTable
-createSmallCharTable:
-  la a0, $str$prototype                    # get string prototype
-  lw t0, 0(a0)                             # get str tag
-  lw t1, 4(a0)                             # get object size
-  lw t2, 8(a0)                             # Get ptr-to-dispatch-table
-  li t3, 1                                 # size of string
-  la a0, smallCharsTable                   # get ptr to charTable
-  li t4, 256
-  mv t5, zero                              # set up idx = 0
-label_47:                                  # loop to create char table
-  sw t0, 0(a0)                             # store type tag
-  sw t1, 4(a0)                             # store object size
-  sw t2, 8(a0)                             # store ptr-to-dispatch-table
-  sw t3, 12(a0)                            # store size of string
-  sw t5, 16(a0)                            # store the character
-  addi a0, a0, 20                          # jumps to the next location to store character
-  addi t5, t5, 1                           # char = char + 1
-  bne t4, t5, label_47                     # goto-loop
-  jr ra                                    # return
-  .data
-  .align 2                                 # to ensure alignment
-
-.globl smallCharsTable
-smallCharsTable:
-  .space 5120
-  .text
-
-.globl strCat
-strCat:
-  addi sp, sp, -12
-  sw ra, 8(sp)
-  sw fp, 4(sp)
-  addi fp, sp, 12
-  lw t0, 4(fp)                             # Load first string to T0
-  lw t1, 0(fp)                             # Load second string to T1
-  lw t0, 12(t0)                            # Get T0's length
-  lw t1, 12(t1)                            # Get T1's length
-  beqz t0, label_48                        # TO is empty so just return T1
-  beqz t1, label_49                        # T1 is empty so just return T0
-  add t0, t0, t1                           # k
-  sw t0, -12(fp)                           # Store k to stack
-  addi t0, t0, 4
-  srli t0, t0, 2
-  la a0, $str$prototype                    # Get string prototype for alloc2
-  addi a1, t0, 4
-  jal alloc2                               # jal alloc
-  lw t0, -12(fp)                           # Load k from stack
-  sw t0, 12(a0)                            # Store k to __len__ attr
-  addi t1, a0, 16                          # T1 = address of new __str__ store
-  lw t0, 4(fp)                             # Load first string to T0
-  lw t2, 12(t0)                            # T2 = T0's length
-  addi t0, t0, 16                          # T0 = content of 1st string
-label_51:                                  # [ENTER BRANCH]: Loop and store for first string
-  beqz t2, label_50                        # Finished storing T0, now do the same for T1
-  lbu t3, 0(t0)                            # Load byte for first str
-  sb t3, 0(t1)                             # Store byte into T1
-  addi t2, t2, -1                          # Decrement T0's length by 1
-  addi t1, t1, 1                           # Increment store __str__ address by 1
-  addi t0, t0, 1                           # Increment str address by 1
-  j label_51                               # [JUMP]: Loop and store for T0
-label_50:                                  # [ENTER BRANCH]: Reset config for second string looping
-  lw t0, 0(fp)                             # Load second string to T0
-  lw t2, 12(t0)                            # T2 = T0's length
-  addi t0, t0, 16                          # T0 = content of 2nd string
-label_52:                                  # [ENTER BRANCH]: Loop and store for second string
-  beqz t2, label_53                        # Finish processing T1, jump to add null char to str
-  lbu t3, 0(t0)                            # Load byte for second str
-  sb t3, 0(t1)                             # Store byte into T1
-  addi t2, t2, -1                          # Decrement T1's length by 1
-  addi t1, t1, 1                           # Increment store __str__ address by 1
-  addi t0, t0, 1                           # Increment str address by 1
-  j label_52                               # [JUMP]: Loop and store for T1
-label_48:                                  # [ENTER BRANCH]: T0 Empty Return T1
-  lw a0, 0(fp)                             # Return T1
-  j label_54                               # [JUMP]; Calling Convention Cleanup
-label_49:                                  # [ENTER BRANCH]: T1 Empty Return T0
-  lw a0, 4(fp)                             # Return T0
-  j label_54                               # [JUMP]: Calling Convention Cleanup
-label_53:                                  # [ENTER BRANCH]: Append Null Char to str
-  sb zero, 0(t1)                           # Append null char to str
-label_54:                                  # [ENTER BRANCH]: Calling Convention Cleanup
-  lw ra, -4(fp)
-  lw fp, -8(fp)
-  addi sp, sp, 12
-  jr ra                                    # [JUMP]: Exit StrCat
 
 .data
 
