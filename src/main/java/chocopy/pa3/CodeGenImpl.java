@@ -235,6 +235,11 @@ public class CodeGenImpl extends CodeGenBase {
             return Integer.MAX_VALUE;
         }
     }
+    @FunctionalInterface
+    protected interface Func3<A, B, C, D>
+    {
+        D apply(A a, B b, C c);
+    }
 
     @FunctionalInterface
     protected interface Func4<A, B, C, D, E>
@@ -638,10 +643,45 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitMUL(A0, T1, A0, "* two operands");
                     break;
                 case "//":
-                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    Label nonzeroDiv = generateLocalLabel();
+                    Label differentSign = generateLocalLabel();
+                    Label divFinished = generateLocalLabel();
+                    bke.emitBNEZ(A0, nonzeroDiv, "Ensure non-zero divisor");
+                    bke.emitJ(errorDiv, "jump to div=0 error handler");
+                        bke.emitLocalLabel(nonzeroDiv, "when division is non-zero");
+                        bke.emitXOR(T2, T1, A0, "check for same sign");
+                        bke.emitBLTZ(T2, differentSign, "if !=, needs to adjust left operand before division");
+
+                        backend.emitDIV(A0, T1, A0, "// two operands");
+                        bke.emitJ(divFinished, "if == sign, just // then finish");
+
+                        //
+                        bke.emitLocalLabel(differentSign, "operands different signs.");
+                        bke.emitSLT(T2, ZERO, A0, "t2 = 1 if right > 0 else 0");
+                        bke.emitADD(T2, T2, T2, "t2 = 2 * t2");
+                        bke.emitADDI(T2, T2, -1, "temp = 1 if right >= 0 else -1");
+                        bke.emitADD(T2, T1, T2, "adjust left operand");
+                        bke.emitDIV(T2, T2, A0, "adjusted division");
+                        bke.emitADDI(A0, T2, -1, "complete division");
+
+                    bke.emitLocalLabel(divFinished, "div finished");
                     break;
                 case "%":
-                    backend.emitREM(A0, T1, A0, "% two operands");
+                    Label nonzeroMod = generateLocalLabel();
+                    Label noRem = generateLocalLabel();
+                    bke.emitBNEZ(A0, nonzeroMod, "Ensure non-zero divisor");
+                    bke.emitJ(errorDiv, "jump to div=0 error handler");
+                    bke.emitLocalLabel(nonzeroMod, "when division is non-zero");
+                    bke.emitREM(T2, T1, A0, "operator rem");
+                    bke.emitBEQZ(T2, noRem, "if remainder, no adjustment");
+                    bke.emitXOR(T3, T2, A0, "check for != signs");
+                    bke.emitBGEZ(T3, noRem, "don't adjust if signs ==");
+                    // bke.emitADD(A0, T2, A0, "adjust");
+                    bke.emitADD(T2, T2, A0, "adjust");
+
+                    bke.emitLocalLabel(noRem, "store result");
+                    bke.emitMV(A0, T2, "store result");
+                    // backend.emitREM(A0, T1, A0, "% two operands");
                     break;
                 case "==":
                     //Erroring
@@ -1070,34 +1110,54 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         @Override
+        public Void analyze(IfExpr ie)
+        {
+            Label elseBranch = generateLocalLabel();
+            Label endOfExpr = generateLocalLabel();
+
+            ie.condition.dispatch(this);
+            backend.emitBEQZ(A0, elseBranch, "If A0 == 0, jump to falseElseBranch");
+            ie.thenExpr.dispatch(this);
+            bke.emitJ(endOfExpr, "jump over if-expr");
+
+            // else:
+            bke.emitLocalLabel(elseBranch, "else-branch");
+            ie.elseExpr.dispatch(this);
+
+            bke.emitLocalLabel(endOfExpr, "continue-after-if-expr");
+            return null;
+        }
+
+        @Override
         public Void analyze(MethodCallExpr mce) {
             List<Integer> tempLocs = new ArrayList<>();
 
-            for (int i = 0; i < mce.args.size(); i++) {
+            for (int i = 0; i < mce.args.size(); i++)
+            {
                 Expr argExpr = mce.args.get(i);
                 argExpr.dispatch(this);
-                //TODO: Not quite sure how to approach this? Doesn't really work? 
-//                FuncType ft = (FuncType) mce.getInferredType();
-//                ValueType argType = ft.parameters.get(i);
-//
-//                //Handle "wrapping" integers and booleans
-//                if (argType.equals(Type.OBJECT_TYPE)
-//                        && argExpr.getInferredType().equals(Type.INT_TYPE))
-//                {
-//                    // Call Int Wrapping Code Emitter
-//                    wrapInteger();
-//                }
-//
-//                if (argType.equals(Type.OBJECT_TYPE)
-//                        && argExpr.getInferredType().equals(Type.BOOL_TYPE))
-//                {
-//                    // Call Bool Wrapping Code Emitter: Create Bool object
-//                    wrapBoolean();
-//                }
+                // //TODO: Not quite sure how to approach this? Doesn't really work?
+                // // FuncType ft = (FuncType) mce.getInferredType();
+                // // ValueType argType = ft.parameters.get(i);
 
-                pushTemp(A0,
+                // //Handle "wrapping" integers and booleans
+                // if (argType.equals(Type.OBJECT_TYPE)
+                //         && argExpr.getInferredType().equals(Type.INT_TYPE))
+                // {
+                //     // Call Int Wrapping Code Emitter
+                //     wrapInteger();
+                // }
+
+                // if (argType.equals(Type.OBJECT_TYPE)
+                //         && argExpr.getInferredType().equals(Type.BOOL_TYPE))
+                // {
+                //     // Call Bool Wrapping Code Emitter: Create Bool object
+                //     wrapBoolean();
+                // }
+
+                tempLocs.add(pushTemp(A0,
                         format("arg %d-th", i),
-                        format("push arg %d-th to stack", i));
+                        format("push arg %d-th to stack", i)));
             }
 
             mce.method.dispatch(this);
@@ -1347,7 +1407,7 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitADD(T1, T0, T1, "Get pointer to char");
                 bke.emitLBU(T1, T1, 0, "Load character");
 
-                bke.emitLI(T0, 20, "????"); // TODO: explain this
+                bke.emitLI(T0, 20, "load size of string object (in bytes to T0)");
                 bke.emitMUL(T1, T1, T0, "t1 = t1 * 20;; Multiply by size of string object");
                 bke.emitLA(T0, charTable, "Index into single-char table");
                 bke.emitADD(T0, T0, T1, "t0 = pointer-to-specific-string-in-char-table");

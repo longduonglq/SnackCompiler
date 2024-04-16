@@ -64,6 +64,23 @@ $.list$prototype:
   .word 0                                  # Initial value of attribute: __len__
   .align 2
 
+.globl $A$prototype
+$A$prototype:
+  .word 4                                  # Type tag for class: A
+  .word 4                                  # Object size
+  .word $A$dispatchTable                   # Pointer to dispatch table
+  .word 42                                 # Initial value of attribute: a
+  .align 2
+
+.globl $B$prototype
+$B$prototype:
+  .word 5                                  # Type tag for class: B
+  .word 5                                  # Object size
+  .word $B$dispatchTable                   # Pointer to dispatch table
+  .word 42                                 # Initial value of attribute: a
+  .word 1                                  # Initial value of attribute: b
+  .align 2
+
 .globl $object$dispatchTable
 $object$dispatchTable:
   .word $object.__init__                   # Implementation for method: object.__init__
@@ -80,25 +97,16 @@ $bool$dispatchTable:
 $str$dispatchTable:
   .word $object.__init__                   # Implementation for method: str.__init__
 
-.globl $a
-$a:
-  .word const_2                            # Initial value of global var: a
+.globl $A$dispatchTable
+$A$dispatchTable:
+  .word $object.__init__                   # Implementation for method: A.__init__
+  .word $A.foo                             # Implementation for method: A.foo
 
-.globl $b
-$b:
-  .word const_3                            # Initial value of global var: b
-
-.globl $c
-$c:
-  .word const_4                            # Initial value of global var: c
-
-.globl $d
-$d:
-  .word const_4                            # Initial value of global var: d
-
-.globl $e
-$e:
-  .word const_4                            # Initial value of global var: e
+.globl $B$dispatchTable
+$B$dispatchTable:
+  .word $B.__init__                        # Implementation for method: B.__init__
+  .word $A.foo                             # Implementation for method: B.foo
+  .word $B.bar                             # Implementation for method: B.bar
 
 .text
 
@@ -117,54 +125,32 @@ main:
   sw fp, @..main.size-8(sp)                # control link
   addi fp, sp, @..main.size                # New fp is at old SP.
   jal initchars                            # Initialize one-character strings.
-  lw a0, $b                                # Load global: b
-  sw a0, -12(fp)                           # Push argument 1 from last.
-  lw a0, $a                                # Load global: a
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $cat2                                # Invoke function: cat2
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  sw a0, $c, t0                            # Assign global: c (using tmp register)
-  lw a0, $a                                # Load global: a
-  sw a0, -12(fp)                           # Push argument 1 from last.
-  lw a0, $a                                # Load global: a
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $cat2                                # Invoke function: cat2
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  sw a0, $d, t0                            # Assign global: d (using tmp register)
-  lw a0, $a                                # Load global: a
-  sw a0, -24(fp)                           # Push argument 2 from last.
-  lw a0, $b                                # Load global: b
-  sw a0, -28(fp)                           # Push argument 1 from last.
-  lw a0, $b                                # Load global: b
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  lw a0, $b                                # Load global: b
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal $cat2                                # Invoke function: cat2
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  la a0, $B$prototype                      # Load pointer to prototype of: B
+  jal alloc                                # Allocate new object in A0
+  sw a0, -20(fp)                           # Push on stack slot 5
   sw a0, -32(fp)                           # Push argument 0 from last.
   addi sp, fp, -32                         # Set SP to last argument.
-  jal $cat3                                # Invoke function: cat3
+  lw a1, 8(a0)                             # Load address of object's dispatch table
+  lw a1, 0(a1)                             # Load address of method: B.__init__
+  jalr a1                                  # Invoke method: B.__init__
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  sw a0, $e, t0                            # Assign global: e (using tmp register)
-  lw a0, $c                                # Load global: c
+  lw a0, -20(fp)                           # Pop stack slot 5
+  bnez a0, label_1                         # Ensure not None
+  j error.None                             # Go to error handler
+label_1:                                   # Not None
+  sw a0, -32(fp)                           # Push argument 0 from last.
+  lw a0, -32(fp)                           # Peek stack slot 7
+  lw a1, 8(a0)                             # Load address of object's dispatch table
+  lw a1, 8(a1)                             # Load address of method: B.bar
+  addi sp, fp, -32                         # Set SP to last argument.
+  jalr a1                                  # Invoke method: B.bar
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  jal makeint                              # Box integer
   sw a0, -16(fp)                           # Push argument 0 from last.
   addi sp, fp, -16                         # Set SP to last argument.
   jal $print                               # Invoke function: print
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $d                                # Load global: d
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $e                                # Load global: e
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  .equiv @..main.size, 48
+  .equiv @..main.size, 32
 label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
   ecall
@@ -189,7 +175,7 @@ $print:
   beq t0, t1, print_9                      # Go to print(bool)
 print_6:                                   # Invalid argument
   li a0, 1                                 # Exit code for: Invalid argument
-  la a1, const_5                           # Load error message as str
+  la a1, const_2                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -197,10 +183,10 @@ print_6:                                   # Invalid argument
 print_9:                                   # Print bool object in A0
   lw a0, @.__bool__(a0)                    # Load attribute __bool__
   beq a0, zero, print_10                   # Go to: print(False)
-  la a0, const_6                           # String representation: True
+  la a0, const_3                           # String representation: True
   j print_8                                # Go to: print(str)
 print_10:                                  # Print False object in A0
-  la a0, const_7                           # String representation: False
+  la a0, const_4                           # String representation: False
   j print_8                                # Go to: print(str)
 
 # Printing strs.
@@ -246,7 +232,7 @@ $len:
   beq t0, t1, len_13                       # Go to len(list)
 len_12:                                    # Invalid argument
   li a0, @error_arg                        # Exit code for: Invalid argument
-  la a1, const_5                           # Load error message as str
+  la a1, const_2                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 len_13:                                    # Get length of string
@@ -296,56 +282,81 @@ input_done:
   addi sp, sp, 16
   jr ra
 
-.globl $cat2
-$cat2:
-  addi sp, sp, -@cat2.size                 # Reserve space for stack frame.
-  sw ra, @cat2.size-4(sp)                  # return address
-  sw fp, @cat2.size-8(sp)                  # control link
-  addi fp, sp, @cat2.size                  # New fp is at old SP.
-  lw a0, 4(fp)                             # Load var: cat2.a
-  sw a0, -12(fp)                           # Push argument 1 from last.
-  lw a0, 0(fp)                             # Load var: cat2.b
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal strcat                               # Call string concatenation function
-  addi sp, fp, -@cat2.size                 # Set SP to stack frame top.
-  j label_2                                # Go to return
+.globl $A.foo
+$A.foo:
+  addi sp, sp, -@A.foo.size                # Reserve space for stack frame.
+  sw ra, @A.foo.size-4(sp)                 # return address
+  sw fp, @A.foo.size-8(sp)                 # control link
+  addi fp, sp, @A.foo.size                 # New fp is at old SP.
+  lw a0, 4(fp)                             # Load var: A.foo.self
+  bnez a0, label_4                         # Ensure not None
+  j error.None                             # Go to error handler
+label_4:                                   # Not None
+  lw a0, 12(a0)                            # Get attribute: A.a
+  j label_3                                # Go to return
   mv a0, zero                              # Load None
-  j label_2                                # Jump to function epilogue
-label_2:                                   # Epilogue
-  .equiv @cat2.size, 16
+  j label_3                                # Jump to function epilogue
+label_3:                                   # Epilogue
+  .equiv @A.foo.size, 16
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @cat2.size                  # Restore stack pointer
+  addi sp, sp, @A.foo.size                 # Restore stack pointer
   jr ra                                    # Return to caller
 
-.globl $cat3
-$cat3:
-  addi sp, sp, -@cat3.size                 # Reserve space for stack frame.
-  sw ra, @cat3.size-4(sp)                  # return address
-  sw fp, @cat3.size-8(sp)                  # control link
-  addi fp, sp, @cat3.size                  # New fp is at old SP.
-  lw a0, 8(fp)                             # Load var: cat3.a
-  sw a0, -28(fp)                           # Push argument 1 from last.
-  lw a0, 4(fp)                             # Load var: cat3.b
-  sw a0, -32(fp)                           # Push argument 0 from last.
-  addi sp, fp, -32                         # Set SP to last argument.
-  jal strcat                               # Call string concatenation function
-  addi sp, fp, -@cat3.size                 # Set SP to stack frame top.
-  sw a0, -12(fp)                           # Push argument 1 from last.
-  lw a0, 0(fp)                             # Load var: cat3.c
+.globl $B.__init__
+$B.__init__:
+  addi sp, sp, -@B.__init__.size           # Reserve space for stack frame.
+  sw ra, @B.__init__.size-4(sp)            # return address
+  sw fp, @B.__init__.size-8(sp)            # control link
+  addi fp, sp, @B.__init__.size            # New fp is at old SP.
+  la a0, const_5                           # Load string literal
   sw a0, -16(fp)                           # Push argument 0 from last.
   addi sp, fp, -16                         # Set SP to last argument.
-  jal strcat                               # Call string concatenation function
-  addi sp, fp, -@cat3.size                 # Set SP to stack frame top.
-  j label_4                                # Go to return
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@B.__init__.size           # Set SP to stack frame top.
   mv a0, zero                              # Load None
-  j label_4                                # Jump to function epilogue
-label_4:                                   # Epilogue
-  .equiv @cat3.size, 32
+  j label_6                                # Jump to function epilogue
+label_6:                                   # Epilogue
+  .equiv @B.__init__.size, 16
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @cat3.size                  # Restore stack pointer
+  addi sp, sp, @B.__init__.size            # Restore stack pointer
+  jr ra                                    # Return to caller
+
+.globl $B.bar
+$B.bar:
+  addi sp, sp, -@B.bar.size                # Reserve space for stack frame.
+  sw ra, @B.bar.size-4(sp)                 # return address
+  sw fp, @B.bar.size-8(sp)                 # control link
+  addi fp, sp, @B.bar.size                 # New fp is at old SP.
+  mv a0, zero                              # Load None
+  sw a0, -12(fp)                           # local variable a
+  lw a0, -12(fp)                           # Load var: B.bar.a
+  bnez a0, label_9                         # Ensure not None
+  j error.None                             # Go to error handler
+label_9:                                   # Not None
+  sw a0, -28(fp)                           # Push argument 1 from last.
+  lw a0, 0(fp)                             # Load var: B.bar.self
+  bnez a0, label_10                        # Ensure not None
+  j error.None                             # Go to error handler
+label_10:                                  # Not None
+  lw a0, 16(a0)                            # Get attribute: B.b
+  jal makebool                             # Box boolean
+  sw a0, -32(fp)                           # Push argument 0 from last.
+  lw a0, -28(fp)                           # Peek stack slot 6
+  lw a1, 8(a0)                             # Load address of object's dispatch table
+  lw a1, 4(a1)                             # Load address of method: A.foo
+  addi sp, fp, -32                         # Set SP to last argument.
+  jalr a1                                  # Invoke method: A.foo
+  addi sp, fp, -@B.bar.size                # Set SP to stack frame top.
+  j label_8                                # Go to return
+  mv a0, zero                              # Load None
+  j label_8                                # Jump to function epilogue
+label_8:                                   # Epilogue
+  .equiv @B.bar.size, 32
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, @B.bar.size                 # Restore stack pointer
   jr ra                                    # Return to caller
 
 .globl alloc
@@ -381,7 +392,7 @@ alloc2_16:                                 # Copy-loop header
   jr ra                                    # Return to caller
 alloc2_15:                                 # OOM handler
   li a0, @error_oom                        # Exit code for: Out of memory
-  la a1, const_8                           # Load error message as str
+  la a1, const_6                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -668,21 +679,21 @@ initchars:
 .globl error.None
 error.None:
   li a0, 4                                 # Exit code for: Operation on None
-  la a1, const_9                           # Load error message as str
+  la a1, const_7                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.Div
 error.Div:
   li a0, 2                                 # Exit code for: Division by zero
-  la a1, const_10                          # Load error message as str
+  la a1, const_8                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.OOB
 error.OOB:
   li a0, 3                                 # Exit code for: Index out of bounds
-  la a1, const_11                          # Load error message as str
+  la a1, const_9                           # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -704,26 +715,8 @@ const_1:
   .word 1                                  # Constant value of attribute: __bool__
   .align 2
 
-.globl const_4
-const_4:
-  .word 3                                  # Type tag for class: str
-  .word 5                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 0                                  # Constant value of attribute: __len__
-  .string ""                               # Constant value of attribute: __str__
-  .align 2
-
-.globl const_2
-const_2:
-  .word 3                                  # Type tag for class: str
-  .word 5                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 2                                  # Constant value of attribute: __len__
-  .string "no"                             # Constant value of attribute: __str__
-  .align 2
-
-.globl const_10
-const_10:
+.globl const_8
+const_8:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -731,8 +724,17 @@ const_10:
   .string "Division by zero"               # Constant value of attribute: __str__
   .align 2
 
-.globl const_8
-const_8:
+.globl const_5
+const_5:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "B"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_6
+const_6:
   .word 3                                  # Type tag for class: str
   .word 8                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -740,8 +742,8 @@ const_8:
   .string "Out of memory"                  # Constant value of attribute: __str__
   .align 2
 
-.globl const_11
-const_11:
+.globl const_9
+const_9:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -749,8 +751,8 @@ const_11:
   .string "Index out of bounds"            # Constant value of attribute: __str__
   .align 2
 
-.globl const_6
-const_6:
+.globl const_3
+const_3:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -758,8 +760,8 @@ const_6:
   .string "True"                           # Constant value of attribute: __str__
   .align 2
 
-.globl const_9
-const_9:
+.globl const_7
+const_7:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -767,8 +769,8 @@ const_9:
   .string "Operation on None"              # Constant value of attribute: __str__
   .align 2
 
-.globl const_5
-const_5:
+.globl const_2
+const_2:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -776,20 +778,11 @@ const_5:
   .string "Invalid argument"               # Constant value of attribute: __str__
   .align 2
 
-.globl const_7
-const_7:
+.globl const_4
+const_4:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
   .word 5                                  # Constant value of attribute: __len__
   .string "False"                          # Constant value of attribute: __str__
-  .align 2
-
-.globl const_3
-const_3:
-  .word 3                                  # Type tag for class: str
-  .word 5                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 1                                  # Constant value of attribute: __len__
-  .string "o"                              # Constant value of attribute: __str__
   .align 2
