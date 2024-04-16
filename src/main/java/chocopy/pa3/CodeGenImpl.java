@@ -1811,7 +1811,7 @@ public class CodeGenImpl extends CodeGenBase {
     protected void emitConsList()
     {
         bke.emitGlobalLabel(consListLabel);
-        Label done = new Label("conslist_done");
+        Label done = new Label("constructListFinale");
         bke.emitADDI(SP, SP, -8, null);
         bke.emitSW(RA, SP, 4, null);
         bke.emitSW(FP, SP, 0, null);
@@ -1832,7 +1832,7 @@ public class CodeGenImpl extends CodeGenBase {
         bke.emitADDI(T2, A0, D__elts__, "t2 points to first array element");
         // t1 = stack-arr; t2 = heap-arr;
 
-        Label loop = new Label("conslist_1");
+        Label loop = generateLocalLabel();
         bke.emitLocalLabel(loop, "copying contents from stack-list to heap-list");
         bke.emitLW(T3, T1, 0, "t3 = stack-arr[0]");
         bke.emitSW(T3, T2, 0, "heap-arr[0] = t3");
