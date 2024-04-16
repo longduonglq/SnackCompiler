@@ -47,15 +47,18 @@ public class CodeGenImpl extends CodeGenBase {
     /**
      * Operation on None.
      */
-    private final Label errorNone = new Label("error.None");
+    // private final Label errorNone = new Label("error.None");
+    private final Label errorNone = new Label("errNONE");
     /**
      * Division by zero.
      */
-    private final Label errorDiv = new Label("error.Div");
+    // private final Label errorDiv = new Label("error.Div");
+    private final Label errorDiv = new Label("errDIV");
     /**
      * Index out of bounds.
      */
-    private final Label errorOob = new Label("error.OOB");
+    // private final Label errorOob = new Label("error.OOB");
+    private final Label errorOob = new Label("errOOB");
 
     private final boolean _EMIT_RT_TRACE = true;
     private final Label consListLabel = new Label("constructList");
