@@ -60,8 +60,8 @@ public class CodeGenImpl extends CodeGenBase {
     private final boolean _EMIT_RT_TRACE = true;
     private final Label consListLabel = new Label("constructList");
     private final Label concatListLabel = new Label("concatenateList");
-    private final Label createCharTable = new Label("createCharTable");
-    private final Label charTable = new Label("charTable");
+    private final Label createCharTable = new Label("createSmallCharTable");
+    private final Label charTable = new Label("smallCharsTable");
 
     protected final RiscVBackend bke;
 
@@ -1320,7 +1320,7 @@ public class CodeGenImpl extends CodeGenBase {
 
             bke.emitLI(A0, le.elements.size(), "get list's size");
             pushTemp(A0, "list-size", format("push list size (=%d) to stack", le.elements.size()));
-            int token = shrinkTopStackTo(curTemp, format("Shrink top of stack before calling `conslist`"));
+            int token = shrinkTopStackTo(curTemp, format("Shrink top of stack before calling `constructList`"));
             // pushTempTopStackAligned(A0, "size", "store size to stack");
             // for (int i = le.elements.size() - 1; i >= 0; i--)
             // {
