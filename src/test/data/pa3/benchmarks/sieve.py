@@ -65,9 +65,11 @@ class DoublingVector(Vector):
 # Makes a vector in the range [i, j)
 def vrange(i:int, j:int) -> Vector:
     v:Vector = None
+    print("1fr")
     v = DoublingVector()
     
     while i < j:
+        print(i)
         v.append(i)
         i = i + 1
 
@@ -80,6 +82,7 @@ def sieve(v:Vector) -> object:
     k:int = 0
 
     while i < v.length():
+        print(i)
         k = v.get(i)
         j = i + 1
         while j < v.length():

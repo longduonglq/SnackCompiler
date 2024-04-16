@@ -39,9 +39,9 @@ public class CodeGenImpl extends CodeGenBase {
     public CodeGenImpl(RiscVBackend backend) {
         super(backend);
         this.bke = backend;
-        bke.defineSym("@bool.True", "const_1");
-        bke.defineSym("@bool.False", "const_0");
-        bke.defineSym("@listHeaderWords", "4");
+        bke.defineSym("@boolTRUE", "const_1");
+        bke.defineSym("@boolFALSE", "const_0");
+        // bke.defineSym("@listHeaderSize", "4");
     }
 
     /**
@@ -58,8 +58,8 @@ public class CodeGenImpl extends CodeGenBase {
     private final Label errorOob = new Label("error.OOB");
 
     private final boolean _EMIT_RT_TRACE = true;
-    private final Label consListLabel = new Label("conslist");
-    private final Label concatListLabel = new Label("concat");
+    private final Label consListLabel = new Label("constructList");
+    private final Label concatListLabel = new Label("concatenateList");
     private final Label createCharTable = new Label("createCharTable");
     private final Label charTable = new Label("charTable");
 
@@ -1882,7 +1882,7 @@ public class CodeGenImpl extends CodeGenBase {
     private void emitWrappedBoolean() {
         Label emitWrappedBooleanLabel = new Label("wrapBoolean");
         Label localTrueBranchLabel = generateLocalLabel();
-        Label boolFalse = new Label("@bool.False");
+        Label boolFalse = new Label("@boolFALSE");
 
         backend.emitGlobalLabel(emitWrappedBooleanLabel);
         //Erroring
