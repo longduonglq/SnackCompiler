@@ -82,11 +82,7 @@ $str$dispatchTable:
 
 .globl $x
 $x:
-  .word 42                                 # Initial value of global var: x
-
-.globl $y
-$y:
-  .word 7                                  # Initial value of global var: y
+  .word const_2                            # Initial value of global var: x
 
 .text
 
@@ -105,135 +101,23 @@ main:
   sw fp, @..main.size-8(sp)                # control link
   addi fp, sp, @..main.size                # New fp is at old SP.
   jal initchars                            # Initialize one-character strings.
+  la a0, const_3                           # Load string literal
+  sw a0, $x, t0                            # Assign global: x (using tmp register)
   lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  xor a0, t0, a0                           # Operator ==
-  seqz a0, a0                              # Operator == (..contd)
-  jal makebool                             # Box boolean
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal $str_to_int                          # Invoke function: str_to_int
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  sw a0, -32(fp)                           # Push argument 0 from last.
+  addi sp, fp, -32                         # Set SP to last argument.
+  jal $reverse_number                      # Invoke function: reverse_number
+  addi sp, fp, -@..main.size               # Set SP to stack frame top.
+  jal makeint                              # Box integer
   sw a0, -16(fp)                           # Push argument 0 from last.
   addi sp, fp, -16                         # Set SP to last argument.
   jal $print                               # Invoke function: print
   addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  xor a0, t0, a0                           # Operator !=
-  snez a0, a0                              # Operator != (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, t0, a0                           # Operator <
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, a0, t0                           # Operator <=
-  seqz a0, a0                              # Operator <= (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, a0, t0                           # Operator >
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $y                                # Load global: y
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, t0, a0                           # Operator >=
-  seqz a0, a0                              # Operator >= (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  xor a0, t0, a0                           # Operator ==
-  seqz a0, a0                              # Operator == (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  xor a0, t0, a0                           # Operator !=
-  snez a0, a0                              # Operator != (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, t0, a0                           # Operator <
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, a0, t0                           # Operator <=
-  seqz a0, a0                              # Operator <= (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, a0, t0                           # Operator >
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  lw a0, $x                                # Load global: x
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, $x                                # Load global: x
-  lw t0, -20(fp)                           # Pop stack slot 5
-  slt a0, t0, a0                           # Operator >=
-  seqz a0, a0                              # Operator >= (..contd)
-  jal makebool                             # Box boolean
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  .equiv @..main.size, 32
+  .equiv @..main.size, 48
 label_0:                                   # End of program
   li a0, 10                                # Code for ecall: exit
   ecall
@@ -258,7 +142,7 @@ $print:
   beq t0, t1, print_9                      # Go to print(bool)
 print_6:                                   # Invalid argument
   li a0, 1                                 # Exit code for: Invalid argument
-  la a1, const_2                           # Load error message as str
+  la a1, const_4                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -266,10 +150,10 @@ print_6:                                   # Invalid argument
 print_9:                                   # Print bool object in A0
   lw a0, @.__bool__(a0)                    # Load attribute __bool__
   beq a0, zero, print_10                   # Go to: print(False)
-  la a0, const_3                           # String representation: True
+  la a0, const_5                           # String representation: True
   j print_8                                # Go to: print(str)
 print_10:                                  # Print False object in A0
-  la a0, const_4                           # String representation: False
+  la a0, const_6                           # String representation: False
   j print_8                                # Go to: print(str)
 
 # Printing strs.
@@ -315,7 +199,7 @@ $len:
   beq t0, t1, len_13                       # Go to len(list)
 len_12:                                    # Invalid argument
   li a0, @error_arg                        # Exit code for: Invalid argument
-  la a1, const_2                           # Load error message as str
+  la a1, const_4                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 len_13:                                    # Get length of string
@@ -365,6 +249,372 @@ input_done:
   addi sp, sp, 16
   jr ra
 
+.globl $str_to_int
+$str_to_int:
+  addi sp, sp, -@str_to_int.size           # Reserve space for stack frame.
+  sw ra, @str_to_int.size-4(sp)            # return address
+  sw fp, @str_to_int.size-8(sp)            # control link
+  addi fp, sp, @str_to_int.size            # New fp is at old SP.
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -12(fp)                           # local variable result
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -16(fp)                           # local variable digit
+  la a0, const_2                           # Load string literal
+  sw a0, -20(fp)                           # local variable char
+  li a0, 1                                 # Load integer literal 1
+  sw a0, -24(fp)                           # local variable sign
+  li a0, 1                                 # Load boolean literal: true
+  sw a0, -28(fp)                           # local variable first_char
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -32(fp)                           # local variable i
+  j label_4                                # Jump to loop test
+label_3:                                   # Top of while loop
+  lw a0, 0(fp)                             # Load var: str_to_int.string
+  sw a0, -36(fp)                           # Push on stack slot 9
+  lw a0, -32(fp)                           # Load var: str_to_int.i
+  lw a1, -36(fp)                           # Peek stack slot 8
+  lw t0, 12(a1)                            # Load attribute: __len__
+  bltu a0, t0, label_5                     # Ensure 0 <= idx < len
+  j error.OOB                              # Go to error handler
+label_5:                                   # Index within bounds
+  sw a0, -40(fp)                           # Push on stack slot 10
+  lw t0, -40(fp)                           # Pop stack slot 10
+  lw a1, -36(fp)                           # Peek stack slot 8
+  addi t0, t0, 16                          # Convert index to offset to char in bytes
+  add t0, a1, t0                           # Get pointer to char
+  lbu t0, 0(t0)                            # Load character
+  li t1, 20
+  mul t0, t0, t1                           # Multiply by size of string object
+  la a0, allChars                          # Index into single-char table
+  add a0, a0, t0
+  sw a0, -20(fp)                           # Assign var: str_to_int.char
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_7                           # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_7                         # Branch on false.
+  lw a0, -28(fp)                           # Load var: str_to_int.first_char
+  bnez a0, label_8                         # Branch on true.
+  la a0, const_8                           # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  li a0, 0                                 # Load integer literal 0
+  j label_2                                # Go to return
+label_8:                                   # End of if-else statement
+  li a0, 1                                 # Load integer literal 1
+  sub a0, zero, a0                         # Unary negation
+  sw a0, -24(fp)                           # Assign var: str_to_int.sign
+  j label_6                                # Then body complete; jump to end-if
+label_7:                                   # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_9                           # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_10                        # Branch on false.
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_9                                # Then body complete; jump to end-if
+label_10:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_10                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_12                        # Branch on false.
+  li a0, 1                                 # Load integer literal 1
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_11                               # Then body complete; jump to end-if
+label_12:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_11                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_14                        # Branch on false.
+  li a0, 2                                 # Load integer literal 2
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_13                               # Then body complete; jump to end-if
+label_14:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_12                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_16                        # Branch on false.
+  li a0, 3                                 # Load integer literal 3
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_15                               # Then body complete; jump to end-if
+label_16:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_12                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_18                        # Branch on false.
+  li a0, 3                                 # Load integer literal 3
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_17                               # Then body complete; jump to end-if
+label_18:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_13                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_20                        # Branch on false.
+  li a0, 4                                 # Load integer literal 4
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_19                               # Then body complete; jump to end-if
+label_20:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_14                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_22                        # Branch on false.
+  li a0, 5                                 # Load integer literal 5
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_21                               # Then body complete; jump to end-if
+label_22:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_15                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_24                        # Branch on false.
+  li a0, 6                                 # Load integer literal 6
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_23                               # Then body complete; jump to end-if
+label_24:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_16                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_26                        # Branch on false.
+  li a0, 7                                 # Load integer literal 7
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_25                               # Then body complete; jump to end-if
+label_26:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_17                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_28                        # Branch on false.
+  li a0, 8                                 # Load integer literal 8
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_27                               # Then body complete; jump to end-if
+label_28:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_18                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_30                        # Branch on false.
+  li a0, 9                                 # Load integer literal 9
+  sw a0, -16(fp)                           # Assign var: str_to_int.digit
+  j label_29                               # Then body complete; jump to end-if
+label_30:                                  # Else body
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_19                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  bnez a0, label_33                        # Branch on true.
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_20                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  bnez a0, label_33                        # Branch on true.
+  lw a0, -20(fp)                           # Load var: str_to_int.char
+  sw a0, -44(fp)                           # Push argument 1 from last.
+  la a0, const_21                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal streql                               # Call string == function
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  beqz a0, label_32                        # Branch on false.
+label_33::
+  lw a0, -12(fp)                           # Load var: str_to_int.result
+  sw a0, -36(fp)                           # Push on stack slot 9
+  lw a0, -24(fp)                           # Load var: str_to_int.sign
+  lw t0, -36(fp)                           # Pop stack slot 9
+  mul a0, t0, a0                           # Operator *
+  j label_2                                # Go to return
+  j label_31                               # Then body complete; jump to end-if
+label_32:                                  # Else body
+  la a0, const_22                          # Load string literal
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal $print                               # Invoke function: print
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  li a0, 0                                 # Load integer literal 0
+  j label_2                                # Go to return
+label_31:                                  # End of if-else statement
+label_29:                                  # End of if-else statement
+label_27:                                  # End of if-else statement
+label_25:                                  # End of if-else statement
+label_23:                                  # End of if-else statement
+label_21:                                  # End of if-else statement
+label_19:                                  # End of if-else statement
+label_17:                                  # End of if-else statement
+label_15:                                  # End of if-else statement
+label_13:                                  # End of if-else statement
+label_11:                                  # End of if-else statement
+label_9:                                   # End of if-else statement
+label_6:                                   # End of if-else statement
+  li a0, 0                                 # Load boolean literal: false
+  sw a0, -28(fp)                           # Assign var: str_to_int.first_char
+  lw a0, -32(fp)                           # Load var: str_to_int.i
+  sw a0, -36(fp)                           # Push on stack slot 9
+  li a0, 1                                 # Load integer literal 1
+  lw t0, -36(fp)                           # Pop stack slot 9
+  add a0, t0, a0                           # Operator +
+  sw a0, -32(fp)                           # Assign var: str_to_int.i
+  lw a0, -12(fp)                           # Load var: str_to_int.result
+  sw a0, -36(fp)                           # Push on stack slot 9
+  li a0, 10                                # Load integer literal 10
+  lw t0, -36(fp)                           # Pop stack slot 9
+  mul a0, t0, a0                           # Operator *
+  sw a0, -36(fp)                           # Push on stack slot 9
+  lw a0, -16(fp)                           # Load var: str_to_int.digit
+  lw t0, -36(fp)                           # Pop stack slot 9
+  add a0, t0, a0                           # Operator +
+  sw a0, -12(fp)                           # Assign var: str_to_int.result
+label_4:                                   # Test loop condition
+  lw a0, -32(fp)                           # Load var: str_to_int.i
+  sw a0, -36(fp)                           # Push on stack slot 9
+  lw a0, 0(fp)                             # Load var: str_to_int.string
+  sw a0, -48(fp)                           # Push argument 0 from last.
+  addi sp, fp, -48                         # Set SP to last argument.
+  jal $len                                 # Invoke function: len
+  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
+  lw t0, -36(fp)                           # Pop stack slot 9
+  blt t0, a0, label_3                      # Branch on <
+  lw a0, -12(fp)                           # Load var: str_to_int.result
+  sw a0, -36(fp)                           # Push on stack slot 9
+  lw a0, -24(fp)                           # Load var: str_to_int.sign
+  lw t0, -36(fp)                           # Pop stack slot 9
+  mul a0, t0, a0                           # Operator *
+  j label_2                                # Go to return
+  mv a0, zero                              # Load None
+  j label_2                                # Jump to function epilogue
+label_2:                                   # Epilogue
+  .equiv @str_to_int.size, 48
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, @str_to_int.size            # Restore stack pointer
+  jr ra                                    # Return to caller
+
+.globl $reverse_number
+$reverse_number:
+  addi sp, sp, -@reverse_number.size       # Reserve space for stack frame.
+  sw ra, @reverse_number.size-4(sp)        # return address
+  sw fp, @reverse_number.size-8(sp)        # control link
+  addi fp, sp, @reverse_number.size        # New fp is at old SP.
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -12(fp)                           # local variable result
+  li a0, 0                                 # Load integer literal 0
+  sw a0, -16(fp)                           # local variable digit
+  j label_37                               # Jump to loop test
+label_36:                                  # Top of while loop
+  lw a0, 0(fp)                             # Load var: reverse_number.n
+  sw a0, -20(fp)                           # Push on stack slot 5
+  li a0, 10                                # Load integer literal 10
+  lw t0, -20(fp)                           # Pop stack slot 5
+  bnez a0, label_38                        # Ensure non-zero divisor
+  j error.Div                              # Go to error handler
+label_38:                                  # Divisor is non-zero
+  rem t2, t0, a0                           # Operator rem
+  beqz t2, label_39                        # If no remainder, no adjustment
+  xor t3, t2, a0                           # Check for differing signs.
+  bgez t3, label_39                        # Don't adjust if signs equal.
+  add a0, t2, a0                           # Adjust
+  j label_40
+label_39:                                  # Store result
+  mv a0, t2
+label_40:                                  # End of %
+  sw a0, -16(fp)                           # Assign var: reverse_number.digit
+  lw a0, -12(fp)                           # Load var: reverse_number.result
+  sw a0, -20(fp)                           # Push on stack slot 5
+  li a0, 10                                # Load integer literal 10
+  lw t0, -20(fp)                           # Pop stack slot 5
+  mul a0, t0, a0                           # Operator *
+  sw a0, -20(fp)                           # Push on stack slot 5
+  lw a0, -16(fp)                           # Load var: reverse_number.digit
+  lw t0, -20(fp)                           # Pop stack slot 5
+  add a0, t0, a0                           # Operator +
+  sw a0, -12(fp)                           # Assign var: reverse_number.result
+  lw a0, 0(fp)                             # Load var: reverse_number.n
+  sw a0, -20(fp)                           # Push on stack slot 5
+  li a0, 10                                # Load integer literal 10
+  lw t0, -20(fp)                           # Pop stack slot 5
+  bnez a0, label_41                        # Ensure non-zero divisor
+  j error.Div                              # Go to error handler
+label_41:                                  # Divisor is non-zero
+  xor t2, t0, a0                           # Check for same sign
+  bltz t2, label_43                        # If !=, need to adjust left operand
+  div a0, t0, a0                           # Operator //
+  j label_42
+label_43:                                  # Operands have differing signs
+  slt t2, zero, a0                         # tmp = 1 if right > 0 else 0
+  add t2, t2, t2                           # tmp *= 2
+  addi t2, t2, -1                          # tmp = 1 if right>=0 else -1
+  add t2, t0, t2                           # Adjust left operand
+  div t2, t2, a0                           # Adjusted division, toward 0
+  addi a0, t2, -1                          # Complete division when signs !=
+label_42:                                  # End of //
+  sw a0, 0(fp)                             # Assign var: reverse_number.n
+label_37:                                  # Test loop condition
+  lw a0, 0(fp)                             # Load var: reverse_number.n
+  sw a0, -20(fp)                           # Push on stack slot 5
+  li a0, 0                                 # Load integer literal 0
+  lw t0, -20(fp)                           # Pop stack slot 5
+  blt a0, t0, label_36                     # Branch on >
+  lw a0, -12(fp)                           # Load var: reverse_number.result
+  j label_35                               # Go to return
+  mv a0, zero                              # Load None
+  j label_35                               # Jump to function epilogue
+label_35:                                  # Epilogue
+  .equiv @reverse_number.size, 32
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, @reverse_number.size        # Restore stack pointer
+  jr ra                                    # Return to caller
+
 .globl alloc
 alloc:
 # Runtime support function alloc.
@@ -398,7 +648,7 @@ alloc2_16:                                 # Copy-loop header
   jr ra                                    # Return to caller
 alloc2_15:                                 # OOM handler
   li a0, @error_oom                        # Exit code for: Out of memory
-  la a1, const_5                           # Load error message as str
+  la a1, const_23                          # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -679,27 +929,50 @@ noconv:
 .globl initchars
 initchars:
 
-        jr ra
+        la a0, $str$prototype
+        lw t0, 0(a0)
+        lw t1, 4(a0)
+        lw t2, 8(a0)
+        li t3, 1
+        la a0, allChars
+        li t4, 256
+        mv t5, zero
+initchars_1:
+        sw t0, 0(a0)
+        sw t1, 4(a0)
+        sw t2, 8(a0)
+        sw t3, 12(a0)
+        sw t5, 16(a0)
+        addi a0, a0, 20
+        addi t5, t5, 1
+        bne t4, t5, initchars_1
+        jr  ra
+        .data
+        .align 2
+        .globl allChars
+allChars:
+        .space 5120
+        .text
 
 
 .globl error.None
 error.None:
   li a0, 4                                 # Exit code for: Operation on None
-  la a1, const_6                           # Load error message as str
+  la a1, const_24                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.Div
 error.Div:
   li a0, 2                                 # Exit code for: Division by zero
-  la a1, const_7                           # Load error message as str
+  la a1, const_25                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
 .globl error.OOB
 error.OOB:
   li a0, 3                                 # Exit code for: Index out of bounds
-  la a1, const_8                           # Load error message as str
+  la a1, const_26                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -721,35 +994,26 @@ const_1:
   .word 1                                  # Constant value of attribute: __bool__
   .align 2
 
-.globl const_7
-const_7:
+.globl const_2
+const_2:
   .word 3                                  # Type tag for class: str
-  .word 9                                  # Object size
+  .word 5                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 16                                 # Constant value of attribute: __len__
-  .string "Division by zero"               # Constant value of attribute: __str__
-  .align 2
-
-.globl const_5
-const_5:
-  .word 3                                  # Type tag for class: str
-  .word 8                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 13                                 # Constant value of attribute: __len__
-  .string "Out of memory"                  # Constant value of attribute: __str__
+  .word 0                                  # Constant value of attribute: __len__
+  .string ""                               # Constant value of attribute: __str__
   .align 2
 
 .globl const_8
 const_8:
   .word 3                                  # Type tag for class: str
-  .word 9                                  # Object size
+  .word 16                                 # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 19                                 # Constant value of attribute: __len__
-  .string "Index out of bounds"            # Constant value of attribute: __str__
+  .word 47                                 # Constant value of attribute: __len__
+  .string "Error: Negative sign not at beginning of string" # Constant value of attribute: __str__
   .align 2
 
-.globl const_3
-const_3:
+.globl const_5
+const_5:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -757,17 +1021,62 @@ const_3:
   .string "True"                           # Constant value of attribute: __str__
   .align 2
 
+.globl const_21
+const_21:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "\t"                             # Constant value of attribute: __str__
+  .align 2
+
+.globl const_20
+const_20:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "\n"                             # Constant value of attribute: __str__
+  .align 2
+
 .globl const_6
 const_6:
   .word 3                                  # Type tag for class: str
-  .word 9                                  # Object size
+  .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 17                                 # Constant value of attribute: __len__
-  .string "Operation on None"              # Constant value of attribute: __str__
+  .word 5                                  # Constant value of attribute: __len__
+  .string "False"                          # Constant value of attribute: __str__
   .align 2
 
-.globl const_2
-const_2:
+.globl const_3
+const_3:
+  .word 3                                  # Type tag for class: str
+  .word 6                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 7                                  # Constant value of attribute: __len__
+  .string "123456\n"                       # Constant value of attribute: __str__
+  .align 2
+
+.globl const_22
+const_22:
+  .word 3                                  # Type tag for class: str
+  .word 13                                 # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 34                                 # Constant value of attribute: __len__
+  .string "Error: Invalid character in string" # Constant value of attribute: __str__
+  .align 2
+
+.globl const_26
+const_26:
+  .word 3                                  # Type tag for class: str
+  .word 9                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 19                                 # Constant value of attribute: __len__
+  .string "Index out of bounds"            # Constant value of attribute: __str__
+  .align 2
+
+.globl const_4
+const_4:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -775,11 +1084,137 @@ const_2:
   .string "Invalid argument"               # Constant value of attribute: __str__
   .align 2
 
-.globl const_4
-const_4:
+.globl const_19
+const_19:
   .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
+  .word 5                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 5                                  # Constant value of attribute: __len__
-  .string "False"                          # Constant value of attribute: __str__
+  .word 1                                  # Constant value of attribute: __len__
+  .string " "                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_23
+const_23:
+  .word 3                                  # Type tag for class: str
+  .word 8                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 13                                 # Constant value of attribute: __len__
+  .string "Out of memory"                  # Constant value of attribute: __str__
+  .align 2
+
+.globl const_7
+const_7:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "-"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_9
+const_9:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "0"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_10
+const_10:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "1"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_25
+const_25:
+  .word 3                                  # Type tag for class: str
+  .word 9                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 16                                 # Constant value of attribute: __len__
+  .string "Division by zero"               # Constant value of attribute: __str__
+  .align 2
+
+.globl const_11
+const_11:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "2"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_12
+const_12:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "3"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_13
+const_13:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "4"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_14
+const_14:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "5"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_15
+const_15:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "6"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_16
+const_16:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "7"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_17
+const_17:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "8"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_18
+const_18:
+  .word 3                                  # Type tag for class: str
+  .word 5                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 1                                  # Constant value of attribute: __len__
+  .string "9"                              # Constant value of attribute: __str__
+  .align 2
+
+.globl const_24
+const_24:
+  .word 3                                  # Type tag for class: str
+  .word 9                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 17                                 # Constant value of attribute: __len__
+  .string "Operation on None"              # Constant value of attribute: __str__
   .align 2
