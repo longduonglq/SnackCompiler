@@ -66,6 +66,7 @@ public class CodeGenImpl extends CodeGenBase {
     private final Label createCharTable = new Label("createSmallCharTable");
     private final Label charTable = new Label("smallCharsTable");
     private final Label strEql = new Label("strEql");
+    private final Label strNEql = new Label("strNEql");
 
     protected final RiscVBackend bke;
 
@@ -725,21 +726,21 @@ public class CodeGenImpl extends CodeGenBase {
                     Label divFinished = generateLocalLabel();
                     bke.emitBNEZ(A0, nonzeroDiv, "Ensure non-zero divisor");
                     bke.emitJ(errorDiv, "jump to div=0 error handler");
-                        bke.emitLocalLabel(nonzeroDiv, "when division is non-zero");
-                        bke.emitXOR(T2, T1, A0, "check for same sign");
-                        bke.emitBLTZ(T2, differentSign, "if !=, needs to adjust left operand before division");
+                    bke.emitLocalLabel(nonzeroDiv, "when division is non-zero");
+                    bke.emitXOR(T2, T1, A0, "check for same sign");
+                    bke.emitBLTZ(T2, differentSign, "if !=, needs to adjust left operand before division");
 
-                        backend.emitDIV(A0, T1, A0, "// two operands");
-                        bke.emitJ(divFinished, "if == sign, just // then finish");
+                    backend.emitDIV(A0, T1, A0, "// two operands");
+                    bke.emitJ(divFinished, "if == sign, just // then finish");
 
-                        //
-                        bke.emitLocalLabel(differentSign, "operands different signs.");
-                        bke.emitSLT(T2, ZERO, A0, "t2 = 1 if right > 0 else 0");
-                        bke.emitADD(T2, T2, T2, "t2 = 2 * t2");
-                        bke.emitADDI(T2, T2, -1, "temp = 1 if right >= 0 else -1");
-                        bke.emitADD(T2, T1, T2, "adjust left operand");
-                        bke.emitDIV(T2, T2, A0, "adjusted division");
-                        bke.emitADDI(A0, T2, -1, "complete division");
+                    //
+                    bke.emitLocalLabel(differentSign, "operands different signs.");
+                    bke.emitSLT(T2, ZERO, A0, "t2 = 1 if right > 0 else 0");
+                    bke.emitADD(T2, T2, T2, "t2 = 2 * t2");
+                    bke.emitADDI(T2, T2, -1, "temp = 1 if right >= 0 else -1");
+                    bke.emitADD(T2, T1, T2, "adjust left operand");
+                    bke.emitDIV(T2, T2, A0, "adjusted division");
+                    bke.emitADDI(A0, T2, -1, "complete division");
 
                     bke.emitLocalLabel(divFinished, "div finished");
                     break;
@@ -788,6 +789,7 @@ public class CodeGenImpl extends CodeGenBase {
                         backend.emitLocalLabel(exitLocalLabel, "Exit Local Label");
                         break;
                     }
+                    break;
                 case "!=":
                     //Erroring
                     //backend.emitSNEZ(T1, T1, null);
@@ -796,11 +798,23 @@ public class CodeGenImpl extends CodeGenBase {
 
                     Label equalLocalLabel2 = generateLocalLabel();
                     Label exitLocalLabel2 = generateLocalLabel();
-                    backend.emitBEQ(A0, T1, equalLocalLabel2, "!=: Compare if A0 & T1 are equal");
-                    backend.emitLI(A0, 1, "Set A0 to be True (1)");
-                    backend.emitJ(exitLocalLabel2, "Jump to exit local label");
-                    backend.emitLocalLabel(equalLocalLabel2, "Equal local label");
-                    backend.emitLI(A0, 0, "Set A0 to be False (0)");
+
+                    if (be.left.getInferredType().equals(Type.STR_TYPE)) {
+                        pushTemp(T1, "left-expr", "push left string to stack");
+                        pushTemp(A0, "right-expr", "push right string to stack");
+                        int token = shrinkTopStackTo(curTemp, "shrink stack");
+                        bke.emitJAL(strNEql, "call string != function");
+
+                        inflateStack(token, "restore stack");
+                        popNTemps(2, "pop left-expr and right-expr off stack");
+                    } else {
+                        backend.emitBEQ(A0, T1, equalLocalLabel2, "!=: Compare if A0 & T1 are equal");
+                        backend.emitLI(A0, 1, "Set A0 to be True (1)");
+                        backend.emitJ(exitLocalLabel2, "Jump to exit local label");
+                        backend.emitLocalLabel(equalLocalLabel2, "Equal local label");
+                        backend.emitLI(A0, 0, "Set A0 to be False (0)");
+                    }
+
                     backend.emitLocalLabel(exitLocalLabel2, "Exit local label");
                     break;
                 case ">":
@@ -844,8 +858,9 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitSEQZ(A0, A0, "Operator is");
                     break;
             }
-            popNTemps(1, "pop [left-operand]");
             backend.emitLocalLabel(exitBinaryExprLocalLabel, "Exit binary expression local label");
+            popNTemps(1, "pop [left-operand]");
+//            backend.emitLocalLabel(exitBinaryExprLocalLabel, "Exit binary expression local label");
             return null;
         }
 
@@ -1789,6 +1804,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitCharTable();
         emitStrCat();
         emitStrEql();
+        emitStrNEql();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
@@ -1830,8 +1846,47 @@ public class CodeGenImpl extends CodeGenBase {
         bke.emitXOR(A0, A0, A0, "empty strings are equal");
 
         bke.emitLocalLabel(strelEnd, "");
-        bke.emitLI(T1, 1, "");
-        bke.emitSUB(A0, T1, A0, "flip return value");
+//        bke.emitLI(T1, 1, "");
+//        bke.emitSUB(A0, T1, A0, "flip return value");
+        bke.emitLW(RA, FP, -4, "");
+        bke.emitLW(FP, FP, -8, "");
+        bke.emitADDI(SP, SP, 8, "");
+        bke.emitJR(RA, "");
+    }
+
+    protected void emitStrNEql()
+    {
+        Label strNEqlYes = generateLocalLabel();
+        Label strNEqlEnd = generateLocalLabel();
+
+        bke.emitGlobalLabel(strNEql);
+        bke.emitADDI(SP, SP, -8, "");
+        bke.emitSW(RA, SP, 4, "save ra");
+        bke.emitSW(FP, SP, 0, "save fp");
+        bke.emitADDI(FP, SP, 8, "");
+
+        bke.emitLW(A1, FP, 4, "");
+        bke.emitLW(A2, FP, 0, "");
+        bke.emitLW(T0, A1, D__len__, "");
+        bke.emitLW(T1, A2, D__len__, "");
+        bke.emitBNE(T0, T1, strNEqlYes, "");
+
+        Label loop = generateLocalLabel();
+        bke.emitLocalLabel(loop, "");
+        bke.emitLBU(T2, A1, D__str__, "");
+        bke.emitLBU(T3, A2, D__str__, "");
+        bke.emitBNE(T2, T3, strNEqlYes, "");
+        bke.emitADDI(A1, A1, 1, "");
+        bke.emitADDI(A2, A2, 1, "");
+        bke.emitADDI(T0, T0, -1, "");
+        bke.emitBGTZ(T0, loop, "");
+        bke.emitXOR(A0, A0, A0, "");
+        bke.emitJ(strNEqlEnd, "");
+
+        bke.emitLocalLabel(strNEqlYes, "");
+        bke.emitLI(A0, 1, "");
+
+        bke.emitLocalLabel(strNEqlEnd, "");
         bke.emitLW(RA, FP, -4, "");
         bke.emitLW(FP, FP, -8, "");
         bke.emitADDI(SP, SP, 8, "");
