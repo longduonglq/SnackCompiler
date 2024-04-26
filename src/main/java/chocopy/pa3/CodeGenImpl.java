@@ -837,9 +837,7 @@ public class CodeGenImpl extends CodeGenBase {
                     backend.emitOR(A0, A0, T1, "or: OR A0 and T1");
                     break;
                 case "and":
-                    backend.emitOR(A0, A0, T1, "and: OR A0 and T1");
-                    backend.emitLI(T0, 0, "Load 0 into temp reg");
-                    backend.emitSUB(A0, T0, A0, "Negate OR operation to get ADD");
+                    backend.emitAND(A0, A0, T1, "and operator");
                     break;
                 case "is":
                     backend.emitXOR(A0, A0, T1, "compare references");

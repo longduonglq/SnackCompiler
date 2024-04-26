@@ -17,10 +17,8 @@
   .equiv @error_none, 4
   .equiv @error_oom, 5
   .equiv @error_nyi, 6
-  .equiv @listHeaderWords, 4
-  .equiv @strHeaderWords, 4
-  .equiv @bool.True, const_1
-  .equiv @bool.False, const_0
+  .equiv @boolTRUE, const_1
+  .equiv @boolFALSE, const_0
 
 .data
 
@@ -80,10 +78,6 @@ $bool$dispatchTable:
 $str$dispatchTable:
   .word $object.__init__                   # Implementation for method: str.__init__
 
-.globl $x
-$x:
-  .word const_2                            # Initial value of global var: x
-
 .text
 
 .globl main
@@ -96,29 +90,24 @@ main:
   add s11, s10, s11                        # Set end of heap (= start of heap + heap size)
   mv ra, zero                              # No normal return from main program.
   mv fp, zero                              # No preceding frame.
-  addi sp, sp, -@..main.size               # Reserve space for stack frame.
-  sw ra, @..main.size-4(sp)                # return address
-  sw fp, @..main.size-8(sp)                # control link
-  addi fp, sp, @..main.size                # New fp is at old SP.
-  jal initchars                            # Initialize one-character strings.
-  la a0, const_3                           # Load string literal
-  sw a0, $x, t0                            # Assign global: x (using tmp register)
-  lw a0, $x                                # Load global: x
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal $str_to_int                          # Invoke function: str_to_int
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  sw a0, -32(fp)                           # Push argument 0 from last.
-  addi sp, fp, -32                         # Set SP to last argument.
-  jal $reverse_number                      # Invoke function: reverse_number
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  jal makeint                              # Box integer
-  sw a0, -16(fp)                           # Push argument 0 from last.
-  addi sp, fp, -16                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@..main.size               # Set SP to stack frame top.
-  .equiv @..main.size, 48
-label_0:                                   # End of program
+  addi sp, sp, -224                        # Saved FP and saved RA (unused at top level).
+  sw ra, 52(sp)                            # [fn=main] Save return address.
+  sw fp, 48(sp)                            # [fn=main] Save control link.
+  sw zero, 0(sp)                           # Top saved FP is 0.
+  sw zero, 4(sp)                           # Top saved RA is 0.
+  addi fp, sp, 224                         # Set FP to previous SP.
+  jal createSmallCharTable                 # create one-character string table
+  la a0, const_2                           # Load string literal: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Fringilla ut morbi tincidunt augue interdum velit. Neque laoreet suspendisse interdum consectetur libero id faucibus nisl. Vitae et leo duis ut diam quam nulla porttitor. Sit amet dictum sit amet justo donec enim. Maecenas volutpat blandit aliquam etiam erat velit scelerisque in dictum. Dignissim convallis aenean et tortor at risus viverra adipiscing. Blandit aliquam etiam erat velit scelerisque in. Non quam lacus suspendisse faucibus interdum posuere lorem ipsum dolor. Lectus quam id leo in vitae turpis massa sed elementum.Vestibulum mattis ullamcorper velit sed ullamcorper. Vestibulum lorem sed risus ultricies tristique. Lorem ipsum dolor sit amet. Ac auctor augue mauris augue neque gravida in fermentum. Ornare arcu odio ut sem. Mi tempus imperdiet nulla malesuada pellentesque elit. Dapibus ultrices in iaculis nunc sed augue lacus viverra. Odio euismod lacinia at quis risus. Leo integer malesuada nunc vel risus commodo viverra maecenas accumsan. Vitae justo eget magna fermentum iaculis eu non diam phasellus. Egestas fringilla phasellus faucibus scelerisque eleifend donec. Tortor consequat id porta nibh venenatis cras. Leo vel fringilla est ullamcorper eget. Augue interdum velit euismod in pellentesque. Diam donec adipiscing tristique risus nec feugiat in fermentum. Commodo sed egestas egestas fringilla. Sit amet consectetur adipiscing elit pellentesque. Tristique senectus et netus et malesuada fames ac turpis. Volutpat odio facilisis mauris sit amet massa vitae. Augue eget arcu dictum varius duis at consectetur.Ullamcorper velit sed ullamcorper morbi tincidunt. Non odio euismod lacinia at quis risus sed vulputate. Mauris vitae ultricies leo integer. Quis eleifend quam adipiscing vitae proin. Massa placerat duis ultricies lacus sed turpis tincidunt id aliquet. Posuere lorem ipsum dolor sit. Tempor commodo ullamcorper a lacus vestibulum sed arcu. Et malesuada fames ac turpis egestas sed tempus. Laoreet id donec ultrices tincidunt arcu. Condimentum vitae sapien pellentesque habitant morbi. Nec ullamcorper sit amet risus.Id interdum velit laoreet id donec ultrices tincidunt arcu. Elementum nibh tellus molestie nunc non. Netus et malesuada fames ac turpis egestas maecenas. Felis donec et odio pellentesque diam volutpat commodo. Sed viverra tellus in hac habitasse platea. Fames ac turpis egestas maecenas pharetra convallis posuere. Eleifend quam adipiscing vitae proin sagittis. In est ante in nibh mauris cursus mattis. Tortor id aliquet lectus proin nibh nisl condimentum. Eget felis eget nunc lobortis mattis aliquam faucibus purus in. Enim nunc faucibus a pellentesque sit amet porttitor eget dolor. Nunc sed velit dignissim sodales. Justo eget magna fermentum iaculis eu non. Aliquam ultrices sagittis orci a scelerisque. Id porta nibh venenatis cras sed felis. Donec enim diam vulputate ut pharetra sit amet aliquam id. Amet nisl purus in mollis nunc sed id semper risus. Sapien eget mi proin sed libero. Sem fringilla ut morbi tincidunt augue interdum. Sit amet aliquam id diam maecenas ultricies mi.Pellentesque dignissim enim sit amet. Ac tortor dignissim convallis aenean et tortor at risus viverra. Enim nunc faucibus a pellentesque. Mi tempus imperdiet nulla malesuada pellentesque elit eget gravida. Metus dictum at tempor commodo. Et malesuada fames ac turpis egestas maecenas pharetra. Vitae ultricies leo integer malesuada. Enim sit amet venenatis urna. Ultricies leo integer malesuada nunc vel risus. Justo laoreet sit amet cursus sit amet dictum. Ut aliquam purus sit amet luctus. Pharetra sit amet aliquam id diam maecenas ultricies."
+  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `string` of "find_at_index_one_indexed" to stack
+  li a0, 1                                 # Load integer literal: 1
+  sw a0, 40(sp)                            # [push-temp `arg 1-th`] push arg 1-th `index` of "find_at_index_one_indexed" to stack
+  addi sp, sp, 40                          # [deflate-stack] shrink stack
+  jal $find_at_index_one_indexed           # Call function: find_at_index_one_indexed
+  addi sp, sp, -40                         # [inflate-stack] inflate stack
+  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
+  addi sp, sp, 44                          # [deflate-stack] shrink stack
+  jal $print                               # Call function: print
+  addi sp, sp, -44                         # [inflate-stack] inflate stack
   li a0, 10                                # Code for ecall: exit
   ecall
 
@@ -142,7 +131,7 @@ $print:
   beq t0, t1, print_9                      # Go to print(bool)
 print_6:                                   # Invalid argument
   li a0, 1                                 # Exit code for: Invalid argument
-  la a1, const_4                           # Load error message as str
+  la a1, const_3                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -150,10 +139,10 @@ print_6:                                   # Invalid argument
 print_9:                                   # Print bool object in A0
   lw a0, @.__bool__(a0)                    # Load attribute __bool__
   beq a0, zero, print_10                   # Go to: print(False)
-  la a0, const_5                           # String representation: True
+  la a0, const_4                           # String representation: True
   j print_8                                # Go to: print(str)
 print_10:                                  # Print False object in A0
-  la a0, const_6                           # String representation: False
+  la a0, const_5                           # String representation: False
   j print_8                                # Go to: print(str)
 
 # Printing strs.
@@ -199,7 +188,7 @@ $len:
   beq t0, t1, len_13                       # Go to len(list)
 len_12:                                    # Invalid argument
   li a0, @error_arg                        # Exit code for: Invalid argument
-  la a1, const_4                           # Load error message as str
+  la a1, const_3                           # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 len_13:                                    # Get length of string
@@ -248,372 +237,642 @@ input_done:
   lw fp, -8(fp)
   addi sp, sp, 16
   jr ra
+  #--------------------------------------------------( str_to_int )-------------------------------------------------- # 
 
 .globl $str_to_int
 $str_to_int:
-  addi sp, sp, -@str_to_int.size           # Reserve space for stack frame.
-  sw ra, @str_to_int.size-4(sp)            # return address
-  sw fp, @str_to_int.size-8(sp)            # control link
-  addi fp, sp, @str_to_int.size            # New fp is at old SP.
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -12(fp)                           # local variable result
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -16(fp)                           # local variable digit
-  la a0, const_2                           # Load string literal
-  sw a0, -20(fp)                           # local variable char
-  li a0, 1                                 # Load integer literal 1
-  sw a0, -24(fp)                           # local variable sign
-  li a0, 1                                 # Load boolean literal: true
-  sw a0, -28(fp)                           # local variable first_char
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -32(fp)                           # local variable i
-  j label_4                                # Jump to loop test
-label_3:                                   # Top of while loop
-  lw a0, 0(fp)                             # Load var: str_to_int.string
-  sw a0, -36(fp)                           # Push on stack slot 9
-  lw a0, -32(fp)                           # Load var: str_to_int.i
-  lw a1, -36(fp)                           # Peek stack slot 8
-  lw t0, 12(a1)                            # Load attribute: __len__
-  bltu a0, t0, label_5                     # Ensure 0 <= idx < len
-  j error.OOB                              # Go to error handler
-label_5:                                   # Index within bounds
-  sw a0, -40(fp)                           # Push on stack slot 10
-  lw t0, -40(fp)                           # Pop stack slot 10
-  lw a1, -36(fp)                           # Peek stack slot 8
-  addi t0, t0, 16                          # Convert index to offset to char in bytes
+  addi sp, sp, -80                         # [fn=str_to_int] Reserve space for stack frame
+  sw ra, 76(sp)                            # [fn=str_to_int] Save return address.
+  sw fp, 72(sp)                            # [fn=str_to_int] Save control link.
+  addi fp, sp, 80                          # [fn=str_to_int] `fp` is at old `sp`.
+  li a0, 0                                 # Load integer literal: 0
+  sw a0, -12(fp)                           # [fn=str_to_int] store local VAR `result: int` FROM reg `a0`
+  li a0, 0                                 # Load integer literal: 0
+  sw a0, -16(fp)                           # [fn=str_to_int] store local VAR `digit: int` FROM reg `a0`
+  la a0, const_6                           # Load string literal: ""
+  sw a0, -20(fp)                           # [fn=str_to_int] store local VAR `char: str` FROM reg `a0`
+  li a0, 1                                 # Load integer literal: 1
+  sw a0, -24(fp)                           # [fn=str_to_int] store local VAR `sign: int` FROM reg `a0`
+  li a0, 1                                 # Load boolean immediate "true" into A0
+  sw a0, -28(fp)                           # [fn=str_to_int] store local VAR `first_char: bool` FROM reg `a0`
+  li a0, 0                                 # Load integer literal: 0
+  sw a0, -32(fp)                           # [fn=str_to_int] store local VAR `i: int` FROM reg `a0`
+label_2:                                   # Top of while loop
+  lw a0, -32(fp)                           # [fn=str_to_int] load local VAR `i: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_5:                                   # Evaluate OR second expression
+  lw a0, 0(fp)                             # [fn=str_to_int] load local PARAM `string: str` to reg `a0`
+  sw a0, 40(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "len" to stack
+  addi sp, sp, 40                          # [deflate-stack] shrink stack
+  jal $len                                 # Call function: len
+  addi sp, sp, -40                         # [inflate-stack] inflate stack
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sub a0, t1, a0                           # <: Subtract A0 (Right) from T1 (Left)
+  li t2, 0                                 # Load 0 into temp reg
+  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 1 else 0
+label_6:                                   # Exit binary expression local label
+  li t0, 1                                 # Store 1 into temp reg
+  beq a0, t0, label_3                      # Check if condition is true
+  j label_4                                # Jump to bottom of while loop to exit
+label_3:                                   # While loop body
+  lw t0, 12(a1)                            # Load attribute __len__
+  lw a0, 0(fp)                             # [fn=str_to_int] load local PARAM `string: str` to reg `a0`
+  sw a0, 44(sp)                            # [push-temp `list`] push list str onto temp
+  lw a0, -32(fp)                           # [fn=str_to_int] load local VAR `i: int` TO reg `a0`
+  lw a1, 44(sp)                            # [pop-temp `list`] retrieve list into A1
+  bnez a1, label_7                         # Ensure not none
+  j errNONE                                # Goes to none handler
+label_7:                                   # Not none
+  lw t0, 12(a1)                            # get attribute __len__ for str
+  bltu a0, t0, label_8                     # Index within bound
+  j errOOB                                 # Go to OOB error handler
+label_8:                                   # Index within bound
+  addi t0, a0, 16                          # Index to offset to char in bytes
   add t0, a1, t0                           # Get pointer to char
-  lbu t0, 0(t0)                            # Load character
+  lbu t0, 0(t0)                            # Load char
   li t1, 20
   mul t0, t0, t1                           # Multiply by size of string object
-  la a0, allChars                          # Index into single-char table
+  la a0, smallCharsTable                   # Index into char table
   add a0, a0, t0
-  sw a0, -20(fp)                           # Assign var: str_to_int.char
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_7                           # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_7                         # Branch on false.
-  lw a0, -28(fp)                           # Load var: str_to_int.first_char
-  bnez a0, label_8                         # Branch on true.
-  la a0, const_8                           # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  li a0, 0                                 # Load integer literal 0
-  j label_2                                # Go to return
-label_8:                                   # End of if-else statement
-  li a0, 1                                 # Load integer literal 1
-  sub a0, zero, a0                         # Unary negation
-  sw a0, -24(fp)                           # Assign var: str_to_int.sign
-  j label_6                                # Then body complete; jump to end-if
-label_7:                                   # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_9                           # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_10                        # Branch on false.
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_9                                # Then body complete; jump to end-if
-label_10:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_10                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_12                        # Branch on false.
-  li a0, 1                                 # Load integer literal 1
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_11                               # Then body complete; jump to end-if
-label_12:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_11                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_14                        # Branch on false.
-  li a0, 2                                 # Load integer literal 2
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_13                               # Then body complete; jump to end-if
-label_14:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_12                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_16                        # Branch on false.
-  li a0, 3                                 # Load integer literal 3
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_15                               # Then body complete; jump to end-if
-label_16:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_12                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_18                        # Branch on false.
-  li a0, 3                                 # Load integer literal 3
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_17                               # Then body complete; jump to end-if
-label_18:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_13                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_20                        # Branch on false.
-  li a0, 4                                 # Load integer literal 4
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_19                               # Then body complete; jump to end-if
-label_20:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_14                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_22                        # Branch on false.
-  li a0, 5                                 # Load integer literal 5
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_21                               # Then body complete; jump to end-if
-label_22:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_15                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_24                        # Branch on false.
-  li a0, 6                                 # Load integer literal 6
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_23                               # Then body complete; jump to end-if
-label_24:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_16                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_26                        # Branch on false.
-  li a0, 7                                 # Load integer literal 7
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_25                               # Then body complete; jump to end-if
-label_26:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_17                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_28                        # Branch on false.
-  li a0, 8                                 # Load integer literal 8
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_27                               # Then body complete; jump to end-if
-label_28:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_18                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_30                        # Branch on false.
-  li a0, 9                                 # Load integer literal 9
-  sw a0, -16(fp)                           # Assign var: str_to_int.digit
-  j label_29                               # Then body complete; jump to end-if
-label_30:                                  # Else body
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_19                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  bnez a0, label_33                        # Branch on true.
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_20                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  bnez a0, label_33                        # Branch on true.
-  lw a0, -20(fp)                           # Load var: str_to_int.char
-  sw a0, -44(fp)                           # Push argument 1 from last.
-  la a0, const_21                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal streql                               # Call string == function
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  beqz a0, label_32                        # Branch on false.
-label_33::
-  lw a0, -12(fp)                           # Load var: str_to_int.result
-  sw a0, -36(fp)                           # Push on stack slot 9
-  lw a0, -24(fp)                           # Load var: str_to_int.sign
-  lw t0, -36(fp)                           # Pop stack slot 9
-  mul a0, t0, a0                           # Operator *
-  j label_2                                # Go to return
-  j label_31                               # Then body complete; jump to end-if
-label_32:                                  # Else body
-  la a0, const_22                          # Load string literal
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal $print                               # Invoke function: print
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  li a0, 0                                 # Load integer literal 0
-  j label_2                                # Go to return
-label_31:                                  # End of if-else statement
-label_29:                                  # End of if-else statement
-label_27:                                  # End of if-else statement
-label_25:                                  # End of if-else statement
-label_23:                                  # End of if-else statement
-label_21:                                  # End of if-else statement
-label_19:                                  # End of if-else statement
-label_17:                                  # End of if-else statement
-label_15:                                  # End of if-else statement
-label_13:                                  # End of if-else statement
-label_11:                                  # End of if-else statement
-label_9:                                   # End of if-else statement
-label_6:                                   # End of if-else statement
-  li a0, 0                                 # Load boolean literal: false
-  sw a0, -28(fp)                           # Assign var: str_to_int.first_char
-  lw a0, -32(fp)                           # Load var: str_to_int.i
-  sw a0, -36(fp)                           # Push on stack slot 9
-  li a0, 1                                 # Load integer literal 1
-  lw t0, -36(fp)                           # Pop stack slot 9
-  add a0, t0, a0                           # Operator +
-  sw a0, -32(fp)                           # Assign var: str_to_int.i
-  lw a0, -12(fp)                           # Load var: str_to_int.result
-  sw a0, -36(fp)                           # Push on stack slot 9
-  li a0, 10                                # Load integer literal 10
-  lw t0, -36(fp)                           # Pop stack slot 9
-  mul a0, t0, a0                           # Operator *
-  sw a0, -36(fp)                           # Push on stack slot 9
-  lw a0, -16(fp)                           # Load var: str_to_int.digit
-  lw t0, -36(fp)                           # Pop stack slot 9
-  add a0, t0, a0                           # Operator +
-  sw a0, -12(fp)                           # Assign var: str_to_int.result
-label_4:                                   # Test loop condition
-  lw a0, -32(fp)                           # Load var: str_to_int.i
-  sw a0, -36(fp)                           # Push on stack slot 9
-  lw a0, 0(fp)                             # Load var: str_to_int.string
-  sw a0, -48(fp)                           # Push argument 0 from last.
-  addi sp, fp, -48                         # Set SP to last argument.
-  jal $len                                 # Invoke function: len
-  addi sp, fp, -@str_to_int.size           # Set SP to stack frame top.
-  lw t0, -36(fp)                           # Pop stack slot 9
-  blt t0, a0, label_3                      # Branch on <
-  lw a0, -12(fp)                           # Load var: str_to_int.result
-  sw a0, -36(fp)                           # Push on stack slot 9
-  lw a0, -24(fp)                           # Load var: str_to_int.sign
-  lw t0, -36(fp)                           # Pop stack slot 9
-  mul a0, t0, a0                           # Operator *
-  j label_2                                # Go to return
-  mv a0, zero                              # Load None
-  j label_2                                # Jump to function epilogue
-label_2:                                   # Epilogue
-  .equiv @str_to_int.size, 48
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -20(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_11:                                  # Evaluate OR second expression
+  la a0, const_7                           # Load string literal: "-"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_13                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_14                               # Jump to exit local label
+label_13:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_14:                                  # Exit local label
+label_12:                                  # Exit binary expression local label
+  beqz a0, label_9                         # If A0 == 0, jump to falseElseBranch
+  lw a0, -28(fp)                           # [fn=str_to_int] load local VAR `first_char: bool` TO reg `a0`
+  beqz a0, label_15                        # If A0 == 0, jump to falseElseBranch
+  la a0, const_8                           # Load string literal: "Error: Negative sign not at beginning of string"
+  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
+  addi sp, sp, 44                          # [deflate-stack] shrink stack
+  jal $print                               # Call function: print
+  addi sp, sp, -44                         # [inflate-stack] inflate stack
+  li a0, 0                                 # Load integer literal: 0
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @str_to_int.size            # Restore stack pointer
+  addi sp, sp, 80                          # Restore stack pointer
   jr ra                                    # Return to caller
+  jal label_16
+label_15::
+label_16::
+  li a0, 1                                 # Load integer literal: 1
+  li t0, -1                                # Store -1
+  mul a0, a0, t0                           # Multiply A0 by -1
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -24(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_10
+label_9::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_19:                                  # Evaluate OR second expression
+  la a0, const_9                           # Load string literal: "0"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_21                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_22                               # Jump to exit local label
+label_21:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_22:                                  # Exit local label
+label_20:                                  # Exit binary expression local label
+  beqz a0, label_17                        # If A0 == 0, jump to falseElseBranch
+  li a0, 0                                 # Load integer literal: 0
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_18
+label_17::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_25:                                  # Evaluate OR second expression
+  la a0, const_10                          # Load string literal: "1"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_27                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_28                               # Jump to exit local label
+label_27:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_28:                                  # Exit local label
+label_26:                                  # Exit binary expression local label
+  beqz a0, label_23                        # If A0 == 0, jump to falseElseBranch
+  li a0, 1                                 # Load integer literal: 1
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_24
+label_23::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_31:                                  # Evaluate OR second expression
+  la a0, const_11                          # Load string literal: "2"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_33                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_34                               # Jump to exit local label
+label_33:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_34:                                  # Exit local label
+label_32:                                  # Exit binary expression local label
+  beqz a0, label_29                        # If A0 == 0, jump to falseElseBranch
+  li a0, 2                                 # Load integer literal: 2
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_30
+label_29::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_37:                                  # Evaluate OR second expression
+  la a0, const_12                          # Load string literal: "3"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_39                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_40                               # Jump to exit local label
+label_39:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_40:                                  # Exit local label
+label_38:                                  # Exit binary expression local label
+  beqz a0, label_35                        # If A0 == 0, jump to falseElseBranch
+  li a0, 3                                 # Load integer literal: 3
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_36
+label_35::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_43:                                  # Evaluate OR second expression
+  la a0, const_12                          # Load string literal: "3"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_45                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_46                               # Jump to exit local label
+label_45:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_46:                                  # Exit local label
+label_44:                                  # Exit binary expression local label
+  beqz a0, label_41                        # If A0 == 0, jump to falseElseBranch
+  li a0, 3                                 # Load integer literal: 3
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_42
+label_41::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_49:                                  # Evaluate OR second expression
+  la a0, const_13                          # Load string literal: "4"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_51                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_52                               # Jump to exit local label
+label_51:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_52:                                  # Exit local label
+label_50:                                  # Exit binary expression local label
+  beqz a0, label_47                        # If A0 == 0, jump to falseElseBranch
+  li a0, 4                                 # Load integer literal: 4
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_48
+label_47::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_55:                                  # Evaluate OR second expression
+  la a0, const_14                          # Load string literal: "5"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_57                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_58                               # Jump to exit local label
+label_57:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_58:                                  # Exit local label
+label_56:                                  # Exit binary expression local label
+  beqz a0, label_53                        # If A0 == 0, jump to falseElseBranch
+  li a0, 5                                 # Load integer literal: 5
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_54
+label_53::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_61:                                  # Evaluate OR second expression
+  la a0, const_15                          # Load string literal: "6"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_63                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_64                               # Jump to exit local label
+label_63:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_64:                                  # Exit local label
+label_62:                                  # Exit binary expression local label
+  beqz a0, label_59                        # If A0 == 0, jump to falseElseBranch
+  li a0, 6                                 # Load integer literal: 6
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_60
+label_59::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_67:                                  # Evaluate OR second expression
+  la a0, const_16                          # Load string literal: "7"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_69                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_70                               # Jump to exit local label
+label_69:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_70:                                  # Exit local label
+label_68:                                  # Exit binary expression local label
+  beqz a0, label_65                        # If A0 == 0, jump to falseElseBranch
+  li a0, 7                                 # Load integer literal: 7
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_66
+label_65::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_73:                                  # Evaluate OR second expression
+  la a0, const_17                          # Load string literal: "8"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_75                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_76                               # Jump to exit local label
+label_75:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_76:                                  # Exit local label
+label_74:                                  # Exit binary expression local label
+  beqz a0, label_71                        # If A0 == 0, jump to falseElseBranch
+  li a0, 8                                 # Load integer literal: 8
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_72
+label_71::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_79:                                  # Evaluate OR second expression
+  la a0, const_18                          # Load string literal: "9"
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_81                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_82                               # Jump to exit local label
+label_81:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_82:                                  # Exit local label
+label_80:                                  # Exit binary expression local label
+  beqz a0, label_77                        # If A0 == 0, jump to falseElseBranch
+  li a0, 9                                 # Load integer literal: 9
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -16(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  jal label_78
+label_77::
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_89:                                  # Evaluate OR second expression
+  la a0, const_19                          # Load string literal: " "
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 40(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 36(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 36                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -36                         # [inflate-stack] restore stack
+  beq a0, t1, label_91                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_92                               # Jump to exit local label
+label_91:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_92:                                  # Exit local label
+label_90:                                  # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+  li t0, 1                                 # Load 1 into temp reg
+  beq a0, t0, label_88                     # Compare if A0 is true
+  j label_87                               # Jump to exit binary expr local label
+label_87:                                  # Evaluate OR second expression
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 40(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_93:                                  # Evaluate OR second expression
+  la a0, const_20                          # Load string literal: "\n"
+  lw t1, 40(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 36(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 32(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 32                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -32                         # [inflate-stack] restore stack
+  beq a0, t1, label_95                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_96                               # Jump to exit local label
+label_95:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_96:                                  # Exit local label
+label_94:                                  # Exit binary expression local label
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  or a0, a0, t1                            # or: OR A0 and T1
+label_88:                                  # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+  li t0, 1                                 # Load 1 into temp reg
+  beq a0, t0, label_86                     # Compare if A0 is true
+  j label_85                               # Jump to exit binary expr local label
+label_85:                                  # Evaluate OR second expression
+  lw a0, -20(fp)                           # [fn=str_to_int] load local VAR `char: str` TO reg `a0`
+  sw a0, 40(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_97:                                  # Evaluate OR second expression
+  la a0, const_21                          # Load string literal: "	"
+  lw t1, 40(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sw t1, 36(sp)                            # [push-temp `left-expr`] push left string to stack
+  sw a0, 32(sp)                            # [push-temp `right-expr`] push right string to stack
+  addi sp, sp, 32                          # [deflate-stack] shrink stack
+  jal strEql                               # call string == function
+  addi sp, sp, -32                         # [inflate-stack] restore stack
+  beq a0, t1, label_99                     # !=: Compare if A0 & T1 are equal
+  li a0, 1                                 # Set A0 to be True (1)
+  j label_100                              # Jump to exit local label
+label_99:                                  # Equal local label
+  li a0, 0                                 # Set A0 to be False (0)
+label_100:                                 # Exit local label
+label_98:                                  # Exit binary expression local label
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  or a0, a0, t1                            # or: OR A0 and T1
+label_86:                                  # Exit binary expression local label
+  beqz a0, label_83                        # If A0 == 0, jump to falseElseBranch
+  lw a0, -12(fp)                           # [fn=str_to_int] load local VAR `result: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_101:                                 # Evaluate OR second expression
+  lw a0, -24(fp)                           # [fn=str_to_int] load local VAR `sign: int` TO reg `a0`
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  mul a0, t1, a0                           # * two operands
+label_102:                                 # Exit binary expression local label
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 80                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  jal label_84
+label_83::
+  la a0, const_22                          # Load string literal: "Error: Invalid character in string"
+  sw a0, 44(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "print" to stack
+  addi sp, sp, 44                          # [deflate-stack] shrink stack
+  jal $print                               # Call function: print
+  addi sp, sp, -44                         # [inflate-stack] inflate stack
+  li a0, 0                                 # Load integer literal: 0
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 80                          # Restore stack pointer
+  jr ra                                    # Return to caller
+label_84::
+label_78::
+label_72::
+label_66::
+label_60::
+label_54::
+label_48::
+label_42::
+label_36::
+label_30::
+label_24::
+label_18::
+label_10::
+  li a0, 0                                 # Load boolean immediate "false" into A0
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -28(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  lw a0, -32(fp)                           # [fn=str_to_int] load local VAR `i: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_103:                                 # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  add a0, t1, a0                           # + two operands
+label_104:                                 # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -32(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  lw a0, -12(fp)                           # [fn=str_to_int] load local VAR `result: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_107:                                 # Evaluate OR second expression
+  li a0, 10                                # Load integer literal: 10
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  mul a0, t1, a0                           # * two operands
+label_108:                                 # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_105:                                 # Evaluate OR second expression
+  lw a0, -16(fp)                           # [fn=str_to_int] load local VAR `digit: int` TO reg `a0`
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  add a0, t1, a0                           # + two operands
+label_106:                                 # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of str_to_int
+  sw a0, -12(t0)                           # [fn=str_to_int] load NON-LOCAL param
+  j label_2                                # Go back to top of while loop
+label_4:                                   # Bottom of while loop
+  lw a0, -12(fp)                           # [fn=str_to_int] load local VAR `result: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_109:                                 # Evaluate OR second expression
+  lw a0, -24(fp)                           # [fn=str_to_int] load local VAR `sign: int` TO reg `a0`
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  mul a0, t1, a0                           # * two operands
+label_110:                                 # Exit binary expression local label
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 80                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  j label_1                                # [fn=str_to_int] jump to epilogue
+label_1:                                   # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 80                          # restore stack ptr
+  jr ra                                    # return to caller
+  #--------------------------------------------------( find_at_index_one_indexed )-------------------------------------------------- # 
 
-.globl $reverse_number
-$reverse_number:
-  addi sp, sp, -@reverse_number.size       # Reserve space for stack frame.
-  sw ra, @reverse_number.size-4(sp)        # return address
-  sw fp, @reverse_number.size-8(sp)        # control link
-  addi fp, sp, @reverse_number.size        # New fp is at old SP.
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -12(fp)                           # local variable result
-  li a0, 0                                 # Load integer literal 0
-  sw a0, -16(fp)                           # local variable digit
-  j label_37                               # Jump to loop test
-label_36:                                  # Top of while loop
-  lw a0, 0(fp)                             # Load var: reverse_number.n
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 10                                # Load integer literal 10
-  lw t0, -20(fp)                           # Pop stack slot 5
-  bnez a0, label_38                        # Ensure non-zero divisor
-  j error.Div                              # Go to error handler
-label_38:                                  # Divisor is non-zero
-  rem t2, t0, a0                           # Operator rem
-  beqz t2, label_39                        # If no remainder, no adjustment
-  xor t3, t2, a0                           # Check for differing signs.
-  bgez t3, label_39                        # Don't adjust if signs equal.
-  add a0, t2, a0                           # Adjust
-  j label_40
-label_39:                                  # Store result
-  mv a0, t2
-label_40:                                  # End of %
-  sw a0, -16(fp)                           # Assign var: reverse_number.digit
-  lw a0, -12(fp)                           # Load var: reverse_number.result
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 10                                # Load integer literal 10
-  lw t0, -20(fp)                           # Pop stack slot 5
-  mul a0, t0, a0                           # Operator *
-  sw a0, -20(fp)                           # Push on stack slot 5
-  lw a0, -16(fp)                           # Load var: reverse_number.digit
-  lw t0, -20(fp)                           # Pop stack slot 5
-  add a0, t0, a0                           # Operator +
-  sw a0, -12(fp)                           # Assign var: reverse_number.result
-  lw a0, 0(fp)                             # Load var: reverse_number.n
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 10                                # Load integer literal 10
-  lw t0, -20(fp)                           # Pop stack slot 5
-  bnez a0, label_41                        # Ensure non-zero divisor
-  j error.Div                              # Go to error handler
-label_41:                                  # Divisor is non-zero
-  xor t2, t0, a0                           # Check for same sign
-  bltz t2, label_43                        # If !=, need to adjust left operand
-  div a0, t0, a0                           # Operator //
-  j label_42
-label_43:                                  # Operands have differing signs
-  slt t2, zero, a0                         # tmp = 1 if right > 0 else 0
-  add t2, t2, t2                           # tmp *= 2
-  addi t2, t2, -1                          # tmp = 1 if right>=0 else -1
-  add t2, t0, t2                           # Adjust left operand
-  div t2, t2, a0                           # Adjusted division, toward 0
-  addi a0, t2, -1                          # Complete division when signs !=
-label_42:                                  # End of //
-  sw a0, 0(fp)                             # Assign var: reverse_number.n
-label_37:                                  # Test loop condition
-  lw a0, 0(fp)                             # Load var: reverse_number.n
-  sw a0, -20(fp)                           # Push on stack slot 5
-  li a0, 0                                 # Load integer literal 0
-  lw t0, -20(fp)                           # Pop stack slot 5
-  blt a0, t0, label_36                     # Branch on >
-  lw a0, -12(fp)                           # Load var: reverse_number.result
-  j label_35                               # Go to return
-  mv a0, zero                              # Load None
-  j label_35                               # Jump to function epilogue
-label_35:                                  # Epilogue
-  .equiv @reverse_number.size, 32
+.globl $find_at_index_one_indexed
+$find_at_index_one_indexed:
+  addi sp, sp, -60                         # [fn=find_at_index_one_indexed] Reserve space for stack frame
+  sw ra, 56(sp)                            # [fn=find_at_index_one_indexed] Save return address.
+  sw fp, 52(sp)                            # [fn=find_at_index_one_indexed] Save control link.
+  addi fp, sp, 60                          # [fn=find_at_index_one_indexed] `fp` is at old `sp`.
+  li a0, 0                                 # Load integer literal: 0
+  sw a0, -12(fp)                           # [fn=find_at_index_one_indexed] store local VAR `i: int` FROM reg `a0`
+label_112:                                 # Top of while loop
+  lw a0, -12(fp)                           # [fn=find_at_index_one_indexed] load local VAR `i: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_117:                                 # Evaluate OR second expression
+  lw a0, 4(fp)                             # [fn=find_at_index_one_indexed] load local PARAM `string: str` to reg `a0`
+  sw a0, 40(sp)                            # [push-temp `arg 0-th`] push arg 0-th `arg` of "len" to stack
+  addi sp, sp, 40                          # [deflate-stack] shrink stack
+  jal $len                                 # Call function: len
+  addi sp, sp, -40                         # [inflate-stack] inflate stack
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sub a0, t1, a0                           # <: Subtract A0 (Right) from T1 (Left)
+  li t2, 0                                 # Load 0 into temp reg
+  slt a0, a0, t2                           # Check if A0 < 0, if so set A0 to 1 else 0
+label_118:                                 # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+  li t0, 0                                 # Load 0 into temp reg
+  beq a0, t0, label_116                    # Compare if A0 is false
+  j label_115                              # Jump to exit binary expr local label
+label_115:                                 # Evaluate OR second expression
+  lw a0, 0(fp)                             # [fn=find_at_index_one_indexed] load local PARAM `index: int` to reg `a0`
+  sw a0, 40(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_119:                                 # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 40(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  bge t1, a0, label_121                    # >=: Compare if T1 >= A0
+  li a0, 0                                 # T1 is NOT greater than A0, Set A0 to False (0)
+  j label_122                              # Jump to exit local label
+label_121::
+  li a0, 1                                 # T1 is greater than A0, Set A0 to True (1)
+label_122:                                 # Exit local label
+label_120:                                 # Exit binary expression local label
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  or a0, a0, t1                            # and: OR A0 and T1
+  li t0, 0                                 # Load 0 into temp reg
+  sub a0, t0, a0                           # Negate OR operation to get ADD
+label_116:                                 # Exit binary expression local label
+  li t0, 1                                 # Store 1 into temp reg
+  beq a0, t0, label_113                    # Check if condition is true
+  j label_114                              # Jump to bottom of while loop to exit
+label_113:                                 # While loop body
+  lw a0, -12(fp)                           # [fn=find_at_index_one_indexed] load local VAR `i: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_125:                                 # Evaluate OR second expression
+  lw a0, 0(fp)                             # [fn=find_at_index_one_indexed] load local PARAM `index: int` to reg `a0`
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  beq a0, t1, label_127                    # ==: Compare if A0 & T1 are equal
+  li a0, 0                                 # Set A0 to be False (0)
+  j label_128                              # Jump to exit local label
+label_127:                                 # Equal Local Label
+  li a0, 1                                 # Set A0 to be True (1)
+label_128:                                 # Exit Local Label
+label_126:                                 # Exit binary expression local label
+  beqz a0, label_123                       # If A0 == 0, jump to falseElseBranch
+  lw t0, 12(a1)                            # Load attribute __len__
+  lw a0, 4(fp)                             # [fn=find_at_index_one_indexed] load local PARAM `string: str` to reg `a0`
+  sw a0, 44(sp)                            # [push-temp `list`] push list str onto temp
+  lw a0, -12(fp)                           # [fn=find_at_index_one_indexed] load local VAR `i: int` TO reg `a0`
+  sw a0, 40(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_131:                                 # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 40(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  sub a0, t1, a0                           # - two operands
+label_132:                                 # Exit binary expression local label
+  lw a1, 44(sp)                            # [pop-temp `list`] retrieve list into A1
+  bnez a1, label_129                       # Ensure not none
+  j errNONE                                # Goes to none handler
+label_129:                                 # Not none
+  lw t0, 12(a1)                            # get attribute __len__ for str
+  bltu a0, t0, label_130                   # Index within bound
+  j errOOB                                 # Go to OOB error handler
+label_130:                                 # Index within bound
+  addi t0, a0, 16                          # Index to offset to char in bytes
+  add t0, a1, t0                           # Get pointer to char
+  lbu t0, 0(t0)                            # Load char
+  li t1, 20
+  mul t0, t0, t1                           # Multiply by size of string object
+  la a0, smallCharsTable                   # Index into char table
+  add a0, a0, t0
   lw ra, -4(fp)                            # Get return address
   lw fp, -8(fp)                            # Use control link to restore caller's fp
-  addi sp, sp, @reverse_number.size        # Restore stack pointer
+  addi sp, sp, 60                          # Restore stack pointer
   jr ra                                    # Return to caller
+  jal label_124
+label_123::
+label_124::
+  lw a0, -12(fp)                           # [fn=find_at_index_one_indexed] load local VAR `i: int` TO reg `a0`
+  sw a0, 44(sp)                            # [push-temp `left-operand`] Store binop's left operand to stack
+label_133:                                 # Evaluate OR second expression
+  li a0, 1                                 # Load integer literal: 1
+  lw t1, 44(sp)                            # [peek-temp `left-operand`] load binop's left operand from stack to `T1`
+  add a0, t1, a0                           # + two operands
+label_134:                                 # Exit binary expression local label
+  sw a0, 44(sp)                            # [push-temp `assignt-stmt's value`] push RHS to temp-stack
+  mv t0, fp                                # Get static link of find_at_index_one_indexed
+  sw a0, -12(t0)                           # [fn=find_at_index_one_indexed] load NON-LOCAL param
+  j label_112                              # Go back to top of while loop
+label_114:                                 # Bottom of while loop
+  la a0, const_23                          # Load string literal: "invalid index"
+  lw ra, -4(fp)                            # Get return address
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 60                          # Restore stack pointer
+  jr ra                                    # Return to caller
+  j label_111                              # [fn=find_at_index_one_indexed] jump to epilogue
+label_111:                                 # Epilogue
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 60                          # restore stack ptr
+  jr ra                                    # return to caller
 
 .globl alloc
 alloc:
@@ -648,7 +907,7 @@ alloc2_16:                                 # Copy-loop header
   jr ra                                    # Return to caller
 alloc2_15:                                 # OOM handler
   li a0, @error_oom                        # Exit code for: Out of memory
-  la a1, const_23                          # Load error message as str
+  la a1, const_24                          # Load error message as str
   addi a1, a1, @.__str__                   # Load address of attribute __str__
   j abort                                  # Abort
 
@@ -675,306 +934,262 @@ heap.init:
   ecall                                    # Request A1 bytes
   jr ra                                    # Return to caller
 
-.globl concat
-concat:
-
-        addi sp, sp, -32
-        sw ra, 28(sp)
-        sw fp, 24(sp)
-        addi fp, sp, 32
-	sw s1, -12(fp)
-        sw s2, -16(fp)
-        sw s3, -20(fp)
-	sw s4, -24(fp)
-        sw s5, -28(fp)
-        lw t0, 4(fp)
-        lw t1, 0(fp)
-        beqz t0, concat_none
-        beqz t1, concat_none
-        lw t0, @.__len__(t0)
-        lw t1, @.__len__(t1)
-        add s5, t0, t1
-        addi a1, s5, @listHeaderWords
-        la a0, $.list$prototype
-        jal alloc2
-        sw s5, @.__len__(a0)
-	mv s5, a0
-        addi s3, s5, @.__elts__
-        lw s1, 4(fp)
-	lw s2, @.__len__(s1)
-        addi s1, s1, @.__elts__
-	lw s4, 12(fp)
-concat_1:
-        beqz s2, concat_2
-        lw a0, 0(s1)
-	jalr ra, s4, 0
-        sw a0, 0(s3)
-        addi s2, s2, -1
-        addi s1, s1, 4
-        addi s3, s3, 4
-        j concat_1
-concat_2:
-        lw s1, 0(fp)
-        lw s2, @.__len__(s1)
-        addi s1, s1, @.__elts__
-	lw s4, 8(fp)
-concat_3:
-        beqz s2, concat_4
-        lw a0, 0(s1)
-	jalr ra, s4, 0
-        sw a0, 0(s3)
-        addi s2, s2, -1
-        addi s1, s1, 4
-        addi s3, s3, 4
-        j concat_3
-concat_4:
-	mv a0, s5
-        lw s1, -12(fp)
-        lw s2, -16(fp)
-        lw s3, -20(fp)
-	lw s4, -24(fp)
-        lw s5, -28(fp)
-        lw ra, -4(fp)
-        lw fp, -8(fp)
-        addi sp, sp, 32
-        jr ra
-concat_none:
-        j error.None
-
-
-.globl conslist
-conslist:
-
-        addi sp, sp, -8
-        sw ra, 4(sp)
-        sw fp, 0(sp)
-        addi fp, sp, 8
-        lw a1, 0(fp)
-        la a0, $.list$prototype
-        beqz a1, conslist_done
-        addi a1, a1, @listHeaderWords
-        jal alloc2
-        lw t0, 0(fp)
-        sw t0, @.__len__(a0)
-        slli t1, t0, 2
-        add t1, t1, fp
-        addi t2, a0, @.__elts__
-conslist_1:
-        lw t3, 0(t1)
-        sw t3, 0(t2)
-        addi t1, t1, -4
-        addi t2, t2, 4
-        addi t0, t0, -1
-        bnez t0, conslist_1
-conslist_done:
-        lw ra, -4(fp)
-        lw fp, -8(fp)
-        addi sp, sp, 8
-        jr ra
-
-
-.globl strcat
-strcat:
-
-        addi sp, sp, -12
-        sw ra, 8(sp)
-        sw fp, 4(sp)
-        addi fp, sp, 12
-        lw t0, 4(fp)
-        lw t1, 0(fp)
-        lw t0, @.__len__(t0)
-        beqz t0, strcat_4
-        lw t1, @.__len__(t1)
-        beqz t1, strcat_5
-        add t1, t0, t1
-        sw t1, -12(fp)
-        addi t1, t1, 4
-        srli t1, t1, 2
-        addi a1, t1, @listHeaderWords
-        la a0, $str$prototype
-        jal alloc2
-        lw t0, -12(fp)
-        sw t0, @.__len__(a0)
-        addi t2, a0, 16
-        lw t0, 4(fp)
-        lw t1, @.__len__(t0)
-        addi t0, t0, @.__str__
-strcat_1:
-        beqz t1, strcat_2
-        lbu t3, 0(t0)
-        sb t3, 0(t2)
-        addi t1, t1, -1
-        addi t0, t0, 1
-        addi t2, t2, 1
-        j strcat_1
-strcat_2:
-        lw t0, 0(fp)
-        lw t1, 12(t0)
-        addi t0, t0, 16
-strcat_3:
-        beqz t1, strcat_6
-        lbu t3, 0(t0)
-        sb t3, 0(t2)
-        addi t1, t1, -1
-        addi t0, t0, 1
-        addi t2, t2, 1
-        j strcat_3
-strcat_4:
-        lw a0, 0(fp)
-        j strcat_7
-strcat_5:
-        lw a0, 4(fp)
-        j strcat_7
-strcat_6:
-        sb zero, 0(t2)
-strcat_7:
-        lw ra, -4(fp)
-        lw fp, -8(fp)
-        addi sp, sp, 12
-        jr ra
-
-
-.globl streql
-streql:
-
-        addi sp, sp, -8
-        sw ra, 4(sp)
-        sw fp, 0(sp)
-        addi fp, sp, 8
-        lw a1, 4(fp)
-        lw a2, 0(fp)
-        lw t0, @.__len__(a1)
-        lw t1, @.__len__(a2)
-        bne t0, t1, streql_no
-streql_1:
-        lbu t2, @.__str__(a1)
-        lbu t3, @.__str__(a2)
-        bne t2, t3, streql_no
-        addi a1, a1, 1
-        addi a2, a2, 1
-        addi t0, t0, -1
-        bgtz t0, streql_1
-        li a0, 1
-        j streql_end
-streql_no:
-        xor a0, a0, a0
-streql_end:
-        lw ra, -4(fp)
-        lw fp, -8(fp)
-        addi sp, sp, 8
-        jr ra
-
-
-.globl strneql
-strneql:
-
-        addi sp, sp, -8
-        sw ra, 4(sp)
-        sw fp, 0(sp)
-        addi fp, sp, 8
-        lw a1, 4(fp)
-        lw a2, 0(fp)
-        lw t0, @.__len__(a1)
-        lw t1, @.__len__(a2)
-        bne t0, t1, strneql_yes
-strneql_1:
-        lbu t2, @.__str__(a1)
-        lbu t3, @.__str__(a2)
-        bne t2, t3, strneql_yes
-        addi a1, a1, 1
-        addi a2, a2, 1
-        addi t0, t0, -1
-        bgtz t0, strneql_1
-        xor a0, a0, a0
-        j strneql_end
-strneql_yes:
-        li a0, 1
-strneql_end:
-        lw ra, -4(fp)
-        lw fp, -8(fp)
-        addi sp, sp, 8
-        jr ra
-
-
-.globl makeint
-makeint:
-
-        addi sp, sp, -8
-        sw ra, 4(sp)
-        sw a0, 0(sp)
-        la a0, $int$prototype
-        jal ra, alloc
-        lw t0, 0(sp)
-        sw t0, @.__int__(a0)
-        lw ra, 4(sp)
-        addi sp, sp, 8
-        jr ra
-
-
-.globl makebool
-makebool:
-
-	slli a0, a0, 4
-        la t0, @bool.False
-        add a0, a0, t0
-	jr ra
-
-
-.globl noconv
-noconv:
-
-        jr ra
-
-
-.globl initchars
-initchars:
-
-        la a0, $str$prototype
-        lw t0, 0(a0)
-        lw t1, 4(a0)
-        lw t2, 8(a0)
-        li t3, 1
-        la a0, allChars
-        li t4, 256
-        mv t5, zero
-initchars_1:
-        sw t0, 0(a0)
-        sw t1, 4(a0)
-        sw t2, 8(a0)
-        sw t3, 12(a0)
-        sw t5, 16(a0)
-        addi a0, a0, 20
-        addi t5, t5, 1
-        bne t4, t5, initchars_1
-        jr  ra
-        .data
-        .align 2
-        .globl allChars
-allChars:
-        .space 5120
-        .text
-
-
-.globl error.None
-error.None:
+.globl errNONE
+errNONE:
   li a0, 4                                 # Exit code for: Operation on None
-  la a1, const_24                          # Load error message as str
-  addi a1, a1, 16                          # Load address of attribute __str__
-  j abort                                  # Abort
-
-.globl error.Div
-error.Div:
-  li a0, 2                                 # Exit code for: Division by zero
   la a1, const_25                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
 
-.globl error.OOB
-error.OOB:
-  li a0, 3                                 # Exit code for: Index out of bounds
+.globl errDIV
+errDIV:
+  li a0, 2                                 # Exit code for: Division by zero
   la a1, const_26                          # Load error message as str
   addi a1, a1, 16                          # Load address of attribute __str__
   j abort                                  # Abort
+
+.globl errOOB
+errOOB:
+  li a0, 3                                 # Exit code for: Index out of bounds
+  la a1, const_27                          # Load error message as str
+  addi a1, a1, 16                          # Load address of attribute __str__
+  j abort                                  # Abort
+
+.globl wrapInteger
+wrapInteger:
+  addi sp, sp, -8
+  sw ra, 0(sp)
+  sw a0, 4(sp)
+  la a0, $int$prototype
+  jal alloc
+  lw t0, 4(sp)
+  sw t0, 12(a0)
+  lw ra, 0(sp)
+  addi sp, sp, 8
+  jr ra
+
+.globl wrapBoolean
+wrapBoolean:
+  li t0, 1                                 # Load True into temp reg for comparison
+  beq a0, t0, label_135                    # Check which boolean branch to go to
+  la a0, const_0                           # Load False constant's address into A0
+  jr ra                                    # Go back
+label_135:                                 # Label for true branch
+  la a0, const_1                           # Load True constant's address into A0
+  jr ra                                    # Go back
+
+.globl concatenateList
+concatenateList:
+  addi sp, sp, -72                         # Reserve space for stack frame
+  sw ra, 68(sp)                            # Save return address.
+  sw fp, 64(sp)                            # Save control link.
+  addi fp, sp, 72                          # `fp` is at old `sp`.
+  sw s1, 60(sp)                            # backup registers s1->s5
+  sw s2, 56(sp)                            # backup registers s1->s5
+  sw s3, 52(sp)                            # backup registers s1->s5
+  sw s4, 48(sp)                            # backup registers s1->s5
+  sw s5, 44(sp)                            # backup registers s1->s5
+  #..................................................( Compute sum of list lengths and then allocate ).................................................. # 
+  lw t0, 4(fp)                             # t0 = arg1
+  lw t1, 0(fp)                             # t1 = arg2
+  beqz t0, label_136                       # asserts t0 not None
+  beqz t1, label_136                       # asserts t1 not None
+  lw t0, 12(t0)                            # t0 = t0.__len__
+  lw t1, 12(t1)                            # t1 = t1.__len__
+  add s5, t0, t1                           # s5 = arg1.len + arg2.len
+  addi a1, s5, 4                           # reserve space for header and load sum into A1 to prep for alloc2
+  la a0, $.list$prototype                  # A0 = list-prototype (for alloc2)
+  jal alloc2                               # allocate new list
+  #__________________________________________________( initialize newly created array )__________________________________________________ # 
+  sw s5, 12(a0)                            # initialize new list's size
+  mv s5, a0                                # s5 = heap-ptr
+  addi s3, s5, 16                          # s3 = heap-ptr + offset-to-first-element
+  lw s1, 4(fp)                             # s1 = arg1
+  lw s2, 12(s1)                            # s2 = arg1.len
+  #..................................................( Copy arg1 into allocated list ).................................................. # 
+  addi s1, s1, 16                          # s1 = &arg1[0]
+label_138:                                 # copy arg1 to destination
+  beqz s2, label_140                       # loop when s2 > 0; else start initialize the copying of arg2
+  lw a0, 0(s1)                             # a0 = arg1[0]
+  sw a0, 0(s3)                             # *ptr-to-first-elem = a0
+  addi s2, s2, -1                          # decrement index s2 = (arg1.len ... 1)
+  addi s1, s1, 4                           # advance to next element of arg1
+  addi s3, s3, 4                           # ptr-to-first-elem += 4
+  j label_138                              # continue loop
+label_140:                                 # preparing to copy arg2
+  lw s1, 0(fp)                             # s1 = arg2
+  lw s2, 12(s1)                            # s2 = arg2.len
+  addi s1, s1, 16                          # s1 = &arg2[0]
+  #..................................................( Copy arg2 into allocated list ).................................................. # 
+label_139:                                 # copy arg2
+  beqz s2, label_137                       # when done copying, go to epilogue
+  lw a0, 0(s1)                             # a0 = arg2[0]
+  sw a0, 0(s3)                             # *ptr-to-first-element = arg2[0]
+  addi s2, s2, -1                          # remaining elements -= 1
+  addi s1, s1, 4                           # advance to next element of arg2
+  addi s3, s3, 4                           # ptr-to-first-element += 4
+  j label_139                              # loop
+label_137:                                 # cleanup
+  mv a0, s5                                # ret = heap-ptr
+  lw s5, 44(sp)                            # restore registers s1 -> s5
+  lw s4, 48(sp)                            # restore registers s1 -> s5
+  lw s3, 52(sp)                            # restore registers s1 -> s5
+  lw s2, 56(sp)                            # restore registers s1 -> s5
+  lw s1, 60(sp)                            # restore registers s1 -> s5
+  lw ra, -4(fp)                            # get return addr
+  lw fp, -8(fp)                            # Use control link to restore caller's fp
+  addi sp, sp, 72                          # restore stack ptr
+  jr ra                                    # return to caller
+label_136:                                 # concat_none:
+  j errNONE                                # 
+
+.globl constructList
+constructList:
+  addi sp, sp, -8
+  sw ra, 4(sp)
+  sw fp, 0(sp)
+  addi fp, sp, 8                           # fp is old sp
+  lw a1, 0(fp)                             # Get list size
+  la a0, $.list$prototype                  # Get list prototype for alloc2
+  beqz a1, constructListFinale             # If list empty, then we done.
+  addi a1, a1, 4                           # Allocate sz + 4 to store elements and headers
+  jal alloc2                               # Allocate space for list on heap
+  lw t0, 0(fp)                             # t0 = len
+  sw t0, 12(a0)                            # store length attr to list on heap
+  li t1, 4                                 # word to bytes conversion
+  mul t1, t0, t1                           # t1 = size (in bytes)  of list in mem
+  add t1, t1, fp                           # t1 now points to start of stack-list
+  addi t2, a0, 16                          # t2 points to first array element
+label_141:                                 # copying contents from stack-list to heap-list
+  lw t3, 0(t1)                             # t3 = stack-arr[0]
+  sw t3, 0(t2)                             # heap-arr[0] = t3
+  addi t1, t1, -4                          # stack-arr -= 4
+  addi t2, t2, 4                           # heap-arr += 4
+  addi t0, t0, -1                          # size -= 1
+  bnez t0, label_141                       # if there are still element to be copy, keep copying.
+constructListFinale:                       # just finishing up
+  lw ra, -4(fp)
+  lw fp, -8(fp)
+  addi sp, sp, 8
+  jr ra
+
+.globl createSmallCharTable
+createSmallCharTable:
+  la a0, $str$prototype                    # get string prototype
+  lw t0, 0(a0)                             # get str tag
+  lw t1, 4(a0)                             # get object size
+  lw t2, 8(a0)                             # Get ptr-to-dispatch-table
+  li t3, 1                                 # size of string
+  la a0, smallCharsTable                   # get ptr to charTable
+  li t4, 256
+  li t5, 0                                 # set up idx = 0
+label_142:                                 # loop to create char table
+  sw t5, 16(a0)                            # store the character
+  sw t3, 12(a0)                            # store size of string
+  sw t2, 8(a0)                             # store ptr-to-dispatch-table
+  sw t1, 4(a0)                             # store object size
+  sw t0, 0(a0)                             # store type tag
+  addi a0, a0, 20                          # jumps to the next location to store character
+  addi t5, t5, 1                           # char = char + 1
+  bne t4, t5, label_142                    # goto-loop
+  jr ra                                    # return
+  .data
+  .align 2                                 # to ensure alignment
+
+.globl smallCharsTable
+smallCharsTable:
+  .space 5120
+  .text
+
+.globl strCat
+strCat:
+  addi sp, sp, -12
+  sw ra, 8(sp)
+  sw fp, 4(sp)
+  addi fp, sp, 12
+  lw t0, 4(fp)                             # Load first string to T0
+  lw t1, 0(fp)                             # Load second string to T1
+  lw t0, 12(t0)                            # Get T0's length
+  lw t1, 12(t1)                            # Get T1's length
+  beqz t0, label_143                       # TO is empty so just return T1
+  beqz t1, label_144                       # T1 is empty so just return T0
+  add t0, t0, t1                           # k
+  sw t0, -12(fp)                           # Store k to stack
+  addi t0, t0, 4
+  srli t0, t0, 2
+  la a0, $str$prototype                    # Get string prototype for alloc2
+  addi a1, t0, 4
+  jal alloc2                               # jal alloc
+  lw t0, -12(fp)                           # Load k from stack
+  sw t0, 12(a0)                            # Store k to __len__ attr
+  addi t1, a0, 16                          # T1 = address of new __str__ store
+  lw t0, 4(fp)                             # Load first string to T0
+  lw t2, 12(t0)                            # T2 = T0's length
+  addi t0, t0, 16                          # T0 = content of 1st string
+label_146:                                 # [ENTER BRANCH]: Loop and store for first string
+  beqz t2, label_145                       # Finished storing T0, now do the same for T1
+  lbu t3, 0(t0)                            # Load byte for first str
+  sb t3, 0(t1)                             # Store byte into T1
+  addi t2, t2, -1                          # Decrement T0's length by 1
+  addi t1, t1, 1                           # Increment store __str__ address by 1
+  addi t0, t0, 1                           # Increment str address by 1
+  j label_146                              # [JUMP]: Loop and store for T0
+label_145:                                 # [ENTER BRANCH]: Reset config for second string looping
+  lw t0, 0(fp)                             # Load second string to T0
+  lw t2, 12(t0)                            # T2 = T0's length
+  addi t0, t0, 16                          # T0 = content of 2nd string
+label_147:                                 # [ENTER BRANCH]: Loop and store for second string
+  beqz t2, label_148                       # Finish processing T1, jump to add null char to str
+  lbu t3, 0(t0)                            # Load byte for second str
+  sb t3, 0(t1)                             # Store byte into T1
+  addi t2, t2, -1                          # Decrement T1's length by 1
+  addi t1, t1, 1                           # Increment store __str__ address by 1
+  addi t0, t0, 1                           # Increment str address by 1
+  j label_147                              # [JUMP]: Loop and store for T1
+label_143:                                 # [ENTER BRANCH]: T0 Empty Return T1
+  lw a0, 0(fp)                             # Return T1
+  j label_149                              # [JUMP]; Calling Convention Cleanup
+label_144:                                 # [ENTER BRANCH]: T1 Empty Return T0
+  lw a0, 4(fp)                             # Return T0
+  j label_149                              # [JUMP]: Calling Convention Cleanup
+label_148:                                 # [ENTER BRANCH]: Append Null Char to str
+  sb zero, 0(t1)                           # Append null char to str
+label_149:                                 # [ENTER BRANCH]: Calling Convention Cleanup
+  lw ra, -4(fp)
+  lw fp, -8(fp)
+  addi sp, sp, 12
+  jr ra                                    # [JUMP]: Exit StrCat
+
+.globl strEql
+strEql:
+  addi sp, sp, -8                          # 
+  sw ra, 4(sp)                             # save ra
+  sw fp, 0(sp)                             # save fp
+  addi fp, sp, 8                           # 
+  lw a1, 4(fp)                             # 
+  lw a2, 0(fp)                             # 
+  lw t0, 12(a1)                            # 
+  lw t1, 12(a2)                            # 
+  bne t0, t1, label_150                    # zero length handler
+label_152:                                 # 
+  lbu t2, 16(a1)                           # 
+  lbu t3, 16(a2)                           # 
+  bne t2, t3, label_150                    # 
+  addi a1, a1, 1                           # 
+  addi a2, a2, 1                           # 
+  addi t0, t0, -1                          # 
+  bgtz t0, label_152                       # 
+  li a0, 1                                 # 
+  j label_151                              # 
+label_150:                                 # 
+  xor a0, a0, a0                           # empty strings are equal
+label_151:                                 # 
+  li t1, 1                                 # 
+  sub a0, t1, a0                           # flip return value
+  lw ra, -4(fp)                            # 
+  lw fp, -8(fp)                            # 
+  addi sp, sp, 8                           # 
+  jr ra                                    # 
 
 .data
 
@@ -994,8 +1209,8 @@ const_1:
   .word 1                                  # Constant value of attribute: __bool__
   .align 2
 
-.globl const_2
-const_2:
+.globl const_6
+const_6:
   .word 3                                  # Type tag for class: str
   .word 5                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1012,8 +1227,8 @@ const_8:
   .string "Error: Negative sign not at beginning of string" # Constant value of attribute: __str__
   .align 2
 
-.globl const_5
-const_5:
+.globl const_4
+const_4:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1039,22 +1254,13 @@ const_20:
   .string "\n"                             # Constant value of attribute: __str__
   .align 2
 
-.globl const_6
-const_6:
+.globl const_5
+const_5:
   .word 3                                  # Type tag for class: str
   .word 6                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
   .word 5                                  # Constant value of attribute: __len__
   .string "False"                          # Constant value of attribute: __str__
-  .align 2
-
-.globl const_3
-const_3:
-  .word 3                                  # Type tag for class: str
-  .word 6                                  # Object size
-  .word $str$dispatchTable                 # Pointer to dispatch table
-  .word 7                                  # Constant value of attribute: __len__
-  .string "123456\n"                       # Constant value of attribute: __str__
   .align 2
 
 .globl const_22
@@ -1066,8 +1272,8 @@ const_22:
   .string "Error: Invalid character in string" # Constant value of attribute: __str__
   .align 2
 
-.globl const_26
-const_26:
+.globl const_27
+const_27:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1075,8 +1281,8 @@ const_26:
   .string "Index out of bounds"            # Constant value of attribute: __str__
   .align 2
 
-.globl const_4
-const_4:
+.globl const_3
+const_3:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1093,8 +1299,8 @@ const_19:
   .string " "                              # Constant value of attribute: __str__
   .align 2
 
-.globl const_23
-const_23:
+.globl const_24
+const_24:
   .word 3                                  # Type tag for class: str
   .word 8                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1129,8 +1335,8 @@ const_10:
   .string "1"                              # Constant value of attribute: __str__
   .align 2
 
-.globl const_25
-const_25:
+.globl const_26
+const_26:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
@@ -1201,6 +1407,15 @@ const_17:
   .string "8"                              # Constant value of attribute: __str__
   .align 2
 
+.globl const_2
+const_2:
+  .word 3                                  # Type tag for class: str
+  .word 933                                # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 3714                               # Constant value of attribute: __len__
+  .string "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Fringilla ut morbi tincidunt augue interdum velit. Neque laoreet suspendisse interdum consectetur libero id faucibus nisl. Vitae et leo duis ut diam quam nulla porttitor. Sit amet dictum sit amet justo donec enim. Maecenas volutpat blandit aliquam etiam erat velit scelerisque in dictum. Dignissim convallis aenean et tortor at risus viverra adipiscing. Blandit aliquam etiam erat velit scelerisque in. Non quam lacus suspendisse faucibus interdum posuere lorem ipsum dolor. Lectus quam id leo in vitae turpis massa sed elementum.Vestibulum mattis ullamcorper velit sed ullamcorper. Vestibulum lorem sed risus ultricies tristique. Lorem ipsum dolor sit amet. Ac auctor augue mauris augue neque gravida in fermentum. Ornare arcu odio ut sem. Mi tempus imperdiet nulla malesuada pellentesque elit. Dapibus ultrices in iaculis nunc sed augue lacus viverra. Odio euismod lacinia at quis risus. Leo integer malesuada nunc vel risus commodo viverra maecenas accumsan. Vitae justo eget magna fermentum iaculis eu non diam phasellus. Egestas fringilla phasellus faucibus scelerisque eleifend donec. Tortor consequat id porta nibh venenatis cras. Leo vel fringilla est ullamcorper eget. Augue interdum velit euismod in pellentesque. Diam donec adipiscing tristique risus nec feugiat in fermentum. Commodo sed egestas egestas fringilla. Sit amet consectetur adipiscing elit pellentesque. Tristique senectus et netus et malesuada fames ac turpis. Volutpat odio facilisis mauris sit amet massa vitae. Augue eget arcu dictum varius duis at consectetur.Ullamcorper velit sed ullamcorper morbi tincidunt. Non odio euismod lacinia at quis risus sed vulputate. Mauris vitae ultricies leo integer. Quis eleifend quam adipiscing vitae proin. Massa placerat duis ultricies lacus sed turpis tincidunt id aliquet. Posuere lorem ipsum dolor sit. Tempor commodo ullamcorper a lacus vestibulum sed arcu. Et malesuada fames ac turpis egestas sed tempus. Laoreet id donec ultrices tincidunt arcu. Condimentum vitae sapien pellentesque habitant morbi. Nec ullamcorper sit amet risus.Id interdum velit laoreet id donec ultrices tincidunt arcu. Elementum nibh tellus molestie nunc non. Netus et malesuada fames ac turpis egestas maecenas. Felis donec et odio pellentesque diam volutpat commodo. Sed viverra tellus in hac habitasse platea. Fames ac turpis egestas maecenas pharetra convallis posuere. Eleifend quam adipiscing vitae proin sagittis. In est ante in nibh mauris cursus mattis. Tortor id aliquet lectus proin nibh nisl condimentum. Eget felis eget nunc lobortis mattis aliquam faucibus purus in. Enim nunc faucibus a pellentesque sit amet porttitor eget dolor. Nunc sed velit dignissim sodales. Justo eget magna fermentum iaculis eu non. Aliquam ultrices sagittis orci a scelerisque. Id porta nibh venenatis cras sed felis. Donec enim diam vulputate ut pharetra sit amet aliquam id. Amet nisl purus in mollis nunc sed id semper risus. Sapien eget mi proin sed libero. Sem fringilla ut morbi tincidunt augue interdum. Sit amet aliquam id diam maecenas ultricies mi.Pellentesque dignissim enim sit amet. Ac tortor dignissim convallis aenean et tortor at risus viverra. Enim nunc faucibus a pellentesque. Mi tempus imperdiet nulla malesuada pellentesque elit eget gravida. Metus dictum at tempor commodo. Et malesuada fames ac turpis egestas maecenas pharetra. Vitae ultricies leo integer malesuada. Enim sit amet venenatis urna. Ultricies leo integer malesuada nunc vel risus. Justo laoreet sit amet cursus sit amet dictum. Ut aliquam purus sit amet luctus. Pharetra sit amet aliquam id diam maecenas ultricies." # Constant value of attribute: __str__
+  .align 2
+
 .globl const_18
 const_18:
   .word 3                                  # Type tag for class: str
@@ -1210,8 +1425,17 @@ const_18:
   .string "9"                              # Constant value of attribute: __str__
   .align 2
 
-.globl const_24
-const_24:
+.globl const_23
+const_23:
+  .word 3                                  # Type tag for class: str
+  .word 8                                  # Object size
+  .word $str$dispatchTable                 # Pointer to dispatch table
+  .word 13                                 # Constant value of attribute: __len__
+  .string "invalid index"                  # Constant value of attribute: __str__
+  .align 2
+
+.globl const_25
+const_25:
   .word 3                                  # Type tag for class: str
   .word 9                                  # Object size
   .word $str$dispatchTable                 # Pointer to dispatch table
