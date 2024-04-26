@@ -189,7 +189,8 @@ public class CodeGenImpl extends CodeGenBase {
         }
 
         // if no explicit final return statement, return None implicitly
-        if (!(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
+        if ((funcInfo.getStatements().size() > 0) &&
+                !(funcInfo.getStatements().get(funcInfo.getStatements().size() - 1) instanceof ReturnStmt))
         {
             backend.emitMV(A0, ZERO, format("[fn=%s] Returning None implicitly", funcInfo.getFuncName()));
         }
