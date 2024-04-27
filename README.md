@@ -95,3 +95,26 @@ Team member 2: Lucas Duong
 No outside help or collaboration received. 
 
 No slip hours used.
+
+**1. Which optimizations did you implement? Cite line numbers in your implementation.**
+We implemented optimizations for unboxing/boxing, printing integers & strings, and the str_to_int method. On lines 1260-1272, we only box for 
+integers and booleans when the variable that we are assigning to is of type `object`. For other cases, we use the unboxed version which helped with 
+reducing unnecessary overhead.
+
+We realized that many of the tests utilized print statements for integers and strings (mainly integers). Currently, when we 
+want to print an int/str, we are required to box them since `print` needs the input to be in `object` form in order to get 
+the appropriate type tag. This creates additional overhead that cummulatively can be a performance hinderance. Thus, within 
+`CallExpr`, if we are printing an integer or a string, we directly call the associated print subroutine for the respective type, 
+skipping the boxing procedure. We noticed that this optimization gave us a speedup of approximately +0.6. The print optimizations can be 
+seen from lines 1136-1154 & 2278-2300. 
+
+Finally, we replaced the `str_to_int` method with our own optimized implementation that converts the string digits to integers via 
+ASCII manipulation on lines 1157-1217. Each numerical digit can be represented as ASCII and refered by an integer. We can subtract the numerical 
+ASCII value for zero from the current digit to the appropriate value in ASCII. 
+
+**2. Which optimization had the most significant impact, why do you think this is the case?**
+The `str_to_int` optimization had the most significant impact since it greatly helped condense all of the if-elif statements and their 
+respective branches into just several lines of mathematical operations when we worked in the ASCII world. The implementation for `str_to_int` varied greatly, so creating 
+an optimized version of it allowed us to fix the function for all tests. 
+
+
