@@ -62,14 +62,20 @@ def get_speedup(p: str, input: str, out: str):
             print(f"Student compiler timed out (> 5 seconds) for ({p}), input ({input}), and output ({out}) file")
             return 0
 
-all_benchmarks = []
+# all_benchmarks = []
+import multiprocessing as mp
+will_bench=[]
 for root, dirs, files in os.walk(dir_path):
     for file in files:
         if file.endswith(".py") and not file.endswith("bench_all.py"):
             if precomputed[f"{file}.in"] < 500000:
-                all_benchmarks.append(
-                    get_speedup(file, f"{file}.in", f"{file}.ast.typed.s.result")
-                )
+                will_bench.append((file, f"{file}.in", f"{file}.ast.typed.s.result"))
+                # all_benchmarks.append(
+                #     get_speedup(file, f"{file}.in", f"{file}.ast.typed.s.result")
+                # )
+
+with mp.Pool(10) as p:
+    all_benchmarks = p.starmap(get_speedup, will_bench, chunksize=32)
 
 pass_count = len([x for x in all_benchmarks if x != 0])
 all_count = len(all_benchmarks)

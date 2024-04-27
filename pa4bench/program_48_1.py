@@ -73,8 +73,7 @@ l: int = 0
 
 a = [1]
 b = [1]
-#k = str_to_int(input())
-k = str_to_int("33\n")
+k = str_to_int(input())
 
 # note that a and b have length 2^k.
 while (i < k):

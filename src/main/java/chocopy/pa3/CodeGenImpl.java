@@ -1166,10 +1166,10 @@ public class CodeGenImpl extends CodeGenBase {
                 _emitSeparator("str-to-int", "&");
 
                 // free up registers a1,...
-                SimpleEntry<Integer, List<SimpleEntry<RiscVBackend.Register, Integer>>> curTempXToken =
-                        AsmHelper.backupRegistersToTemp(bke, MAX_TEMPS, curTemp, "backup registers",
-                                A1, T0, T1, T2, T3, T4);
-                curTemp = curTempXToken.getKey(); // these functions are pure so must update manually
+                // SimpleEntry<Integer, List<SimpleEntry<RiscVBackend.Register, Integer>>> curTempXToken =
+                //         AsmHelper.backupRegistersToTemp(bke, MAX_TEMPS, curTemp, "backup registers",
+                //                 A1, T0, T1, T2, T3, T4);
+                // curTemp = curTempXToken.getKey(); // these functions are pure so must update manually
 
                 bke.emitLI(A1, 0, "set A1 to be counter with initial value = 0");
                 bke.emitLI(T4, 0, "If T4 == 0, then positive num. Else then negative num");
@@ -1211,8 +1211,9 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitMV(A0, A1, "Move A1 to A0");
                 // bke.emitJR(RA, "return back to caller");
                 // restores registers
-                curTemp = AsmHelper.restoreRegisters(bke, MAX_TEMPS, curTemp, "restore registers",
-                        curTempXToken.getValue());
+
+                // curTemp = AsmHelper.restoreRegisters(bke, MAX_TEMPS, curTemp, "restore registers",
+                //         curTempXToken.getValue());
                 return null;
             }
 
