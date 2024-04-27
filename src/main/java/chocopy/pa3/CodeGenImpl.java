@@ -67,6 +67,7 @@ public class CodeGenImpl extends CodeGenBase {
     private final Label charTable = new Label("smallCharsTable");
     private final Label strEql = new Label("strEql");
     private final Label strNEql = new Label("strNEql");
+    private final Label printInt = new Label("printInt");
 
     protected final RiscVBackend bke;
 
@@ -1132,6 +1133,17 @@ public class CodeGenImpl extends CodeGenBase {
                 return null;
             }
 
+            //if printing an int, do it directly, avoid the print() & boxing overhead
+            if (functionName.equals("print") &&
+                    (ce.args.size() == 1) &&
+                    (ce.args.get(0).getInferredType().equals(Type.INT_TYPE))) {
+                //Put integer into ce
+                ce.args.get(0).dispatch(this);
+                bke.emitMV(A1, A0, "Move int in A0 to A1");
+                bke.emitJAL(printInt, "call print int subroutine");
+                return null;
+            }
+
             if (ceSymbolInfo instanceof FuncInfo) {
                 //FUNCTIONS
                 FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
@@ -1806,6 +1818,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitStrCat();
         emitStrEql();
         emitStrNEql();
+        emitPrintInt();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
@@ -2223,5 +2236,17 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitLW(FP, FP, -8, null);
         backend.emitADDI(SP, SP, 12, null);
         backend.emitJR(RA, "[JUMP]: Exit StrCat");
+    }
+
+    protected void emitPrintInt() {
+        //Put integer into A1
+        bke.emitGlobalLabel(printInt);
+        bke.emitLI(A0, 1, "print int ecall code");
+        bke.emitEcall("print integer");
+        bke.emitLI(A1, 10, "load newline char");
+        bke.emitLI(A0, 11, "print_char ecall code");
+        bke.emitEcall("print char");
+        bke.emitMV(A0, ZERO, "load None");
+        bke.emitJR(RA, "return back to caller");
     }
 }
