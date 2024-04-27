@@ -1132,7 +1132,7 @@ public class CodeGenImpl extends CodeGenBase {
                 return null;
             }
 
-            //if printing an int, do it directly, avoid the print() & boxing overhead
+            //OPTIMIZATION: if printing an int, do it directly, avoid the print() & boxing overhead
             if (functionName.equals("print") &&
                     (ce.args.size() == 1) &&
                     (ce.args.get(0).getInferredType().equals(Type.INT_TYPE))) {
@@ -1143,12 +1143,63 @@ public class CodeGenImpl extends CodeGenBase {
                 return null;
             }
 
+            //OPTIMIZATION: if printing a str, do it directly, avoid the print() & boxing overhead
             if (functionName.equals("print") &&
                     (ce.args.size() == 1) &&
                     (ce.args.get(0).getInferredType().equals(Type.STR_TYPE))) {
                 //Put integer into ce
                 ce.args.get(0).dispatch(this);
                 bke.emitJAL(printStr, "call print str subroutine");
+                return null;
+            }
+
+            //OPTIMIZATION: str_to_int
+            if (functionName.equals("str_to_int") &&
+                    (ce.args.size() == 1) &&
+                    (ce.args.get(0).getInferredType().equals(Type.STR_TYPE))) {
+                ce.args.get(0).dispatch(this);
+                Label convertLocalLabel = generateLocalLabel();
+                Label doneLocalLabel = generateLocalLabel();
+                Label positiveNumLabel = generateLocalLabel();
+                Label setSignFlagLabel = generateLocalLabel();
+                Label errorLabel = generateLocalLabel();
+
+                bke.emitLI(A1, 0, "set A1 to be counter with initial value = 0");
+                bke.emitLI(T4, 0, "If T4 == 0, then positive num. Else then negative num");
+
+                bke.emitLocalLabel(convertLocalLabel, "start conversion");
+                bke.emitLBU(T0, A0, 0, "load current char");;
+                bke.emitBEQZ(T0, doneLocalLabel, "go to done local label");
+                bke.emitLI(T1, 48, "load ASCII '0'");
+                bke.emitLI(T2, 58, "load ASCII ':' (the ASCII char right after '9')");
+                bke.emitLI(T3, 45, "load ASCII '-'");
+                //Handle negative numbers
+                bke.emitBEQ(T0, T3, setSignFlagLabel, "check to see if char is '-' for negative numbers");
+
+                bke.emitBGEU(T0, T2, errorLabel, "ERROR: input char greater than 9");
+                bke.emitSUB(T0, T0, T1, "convert from ASCII to decimal");
+                bke.emitLI(T1, 10, "load const 10");
+                bke.emitMUL(T0, T0, T1, "multiply total by 10");
+                bke.emitADD(A1, A1, T0, "add digit to total");
+                bke.emitADDI(A0, A0, 1, "increment address by 1 to get next char");
+                bke.emitJ(convertLocalLabel, "go to conversion beginning");
+
+                bke.emitLocalLabel(setSignFlagLabel, "Set Sign Flag:");
+                bke.emitLI(T4, -1, "Set sign flag to negative: T4 = -1");
+                bke.emitJ(convertLocalLabel, "go to conversion beginning");
+
+                bke.emitLocalLabel(errorLabel, "Error:");
+                bke.emitLI(A0,0, "return 0 on error");
+                bke.emitJ(positiveNumLabel, "go to positive num label");
+
+                bke.emitLocalLabel(doneLocalLabel, "Done:");
+                //Check to see if num is negative and if so flip value
+                bke.emitLI(T1, 0, "Set T1 = 0 to be positive");
+                bke.emitBEQ(T4, T1, positiveNumLabel, "Go to positive num label");
+                bke.emitSUB(A1, T1, A1, "negate A0");
+                bke.emitMV(A0, A1, "Move A1 to A0");
+                bke.emitLocalLabel(positiveNumLabel, "Positive num label");
+                bke.emitJR(RA, "return back to caller");
                 return null;
             }
 
@@ -1835,8 +1886,6 @@ public class CodeGenImpl extends CodeGenBase {
         bke.emitXOR(A0, A0, A0, "empty strings are equal");
 
         bke.emitLocalLabel(strelEnd, "");
-//        bke.emitLI(T1, 1, "");
-//        bke.emitSUB(A0, T1, A0, "flip return value");
         bke.emitLW(RA, FP, -4, "");
         bke.emitLW(FP, FP, -8, "");
         bke.emitADDI(SP, SP, 8, "");
@@ -2214,7 +2263,7 @@ public class CodeGenImpl extends CodeGenBase {
     }
 
     protected void emitPrintStr() {
-        //Put string into A1 prior
+        //Put string into A0 prior
         bke.emitGlobalLabel(printStr);
         bke.emitADDI(A1, A0, 16, "get __str__ offset");
         bke.emitLI(A0, 4, "print str ecall code");
