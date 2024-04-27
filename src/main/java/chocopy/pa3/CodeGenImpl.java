@@ -1152,7 +1152,7 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitJAL(printStr, "call print str subroutine");
                 return null;
             }
-
+            _AssertRegistersFree(A1, A0);
             //OPTIMIZATION: str_to_int
             if (functionName.equals("str_to_int") &&
                     (ce.args.size() == 1) &&
@@ -1163,12 +1163,19 @@ public class CodeGenImpl extends CodeGenBase {
                 Label positiveNumLabel = generateLocalLabel();
                 Label setSignFlagLabel = generateLocalLabel();
                 Label errorLabel = generateLocalLabel();
+                _emitSeparator("str-to-int", "&");
+
+                // free up registers a1,...
+                SimpleEntry<Integer, List<SimpleEntry<RiscVBackend.Register, Integer>>> curTempXToken =
+                        AsmHelper.backupRegistersToTemp(bke, MAX_TEMPS, curTemp, "backup registers",
+                                A1, T0, T1, T2, T3, T4);
+                curTemp = curTempXToken.getKey(); // these functions are pure so must update manually
 
                 bke.emitLI(A1, 0, "set A1 to be counter with initial value = 0");
                 bke.emitLI(T4, 0, "If T4 == 0, then positive num. Else then negative num");
 
                 bke.emitLocalLabel(convertLocalLabel, "start conversion");
-                bke.emitLBU(T0, A0, 0, "load current char");;
+                bke.emitLBU(T0, A0, D__str__, "load current char");;
                 bke.emitBEQZ(T0, doneLocalLabel, "go to done local label");
                 bke.emitLI(T1, 48, "load ASCII '0'");
                 bke.emitLI(T2, 58, "load ASCII ':' (the ASCII char right after '9')");
@@ -1177,9 +1184,12 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitBEQ(T0, T3, setSignFlagLabel, "check to see if char is '-' for negative numbers");
 
                 bke.emitBGEU(T0, T2, errorLabel, "ERROR: input char greater than 9");
+                bke.emitLI(T2, 0xA, "load ASCII '\\n' ");
+                bke.emitBEQ(T0, T2, doneLocalLabel, "once reach newline, we done");
+
                 bke.emitSUB(T0, T0, T1, "convert from ASCII to decimal");
                 bke.emitLI(T1, 10, "load const 10");
-                bke.emitMUL(T0, T0, T1, "multiply total by 10");
+                bke.emitMUL(A1, A1, T1, "multiply total by 10");
                 bke.emitADD(A1, A1, T0, "add digit to total");
                 bke.emitADDI(A0, A0, 1, "increment address by 1 to get next char");
                 bke.emitJ(convertLocalLabel, "go to conversion beginning");
@@ -1197,9 +1207,12 @@ public class CodeGenImpl extends CodeGenBase {
                 bke.emitLI(T1, 0, "Set T1 = 0 to be positive");
                 bke.emitBEQ(T4, T1, positiveNumLabel, "Go to positive num label");
                 bke.emitSUB(A1, T1, A1, "negate A0");
-                bke.emitMV(A0, A1, "Move A1 to A0");
                 bke.emitLocalLabel(positiveNumLabel, "Positive num label");
-                bke.emitJR(RA, "return back to caller");
+                bke.emitMV(A0, A1, "Move A1 to A0");
+                // bke.emitJR(RA, "return back to caller");
+                // restores registers
+                curTemp = AsmHelper.restoreRegisters(bke, MAX_TEMPS, curTemp, "restore registers",
+                        curTempXToken.getValue());
                 return null;
             }
 
