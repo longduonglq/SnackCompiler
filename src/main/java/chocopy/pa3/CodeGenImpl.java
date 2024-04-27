@@ -68,6 +68,7 @@ public class CodeGenImpl extends CodeGenBase {
     private final Label strEql = new Label("strEql");
     private final Label strNEql = new Label("strNEql");
     private final Label printInt = new Label("printInt");
+    private final Label printStr = new Label("printStr");
 
     protected final RiscVBackend bke;
 
@@ -666,7 +667,6 @@ public class CodeGenImpl extends CodeGenBase {
             Label exitBinaryExprLocalLabel = generateLocalLabel();
 
             be.left.dispatch(this);
-            // _pushRegToStack(A0, "Store binop's left operand to stack");
             int left = pushTemp(A0, "left-operand", "Store binop's left operand to stack");
 
             //OR short-circuiting
@@ -687,7 +687,6 @@ public class CodeGenImpl extends CodeGenBase {
 
             backend.emitLocalLabel(evaluateSecondExpressionLocalLabel, "Evaluate OR second expression");
             be.right.dispatch(this);
-            // _popStackToReg(T1, "Binop's left operand from stack to `T1`.");
             loadTempToReg(T1, left, "load binop's left operand from stack to `T1`");
 
             switch (be.operator)
@@ -1144,6 +1143,15 @@ public class CodeGenImpl extends CodeGenBase {
                 return null;
             }
 
+            if (functionName.equals("print") &&
+                    (ce.args.size() == 1) &&
+                    (ce.args.get(0).getInferredType().equals(Type.STR_TYPE))) {
+                //Put integer into ce
+                ce.args.get(0).dispatch(this);
+                bke.emitJAL(printStr, "call print str subroutine");
+                return null;
+            }
+
             if (ceSymbolInfo instanceof FuncInfo) {
                 //FUNCTIONS
                 FuncInfo functionInfo = (FuncInfo) sym.get(functionName);
@@ -1393,40 +1401,6 @@ public class CodeGenImpl extends CodeGenBase {
                                 bke.emitSW(dest, fp, offset, cmnt);
                                 return null;
                             });
-
-                    // StackVarInfo stackVarInfo = (StackVarInfo) targetExprSymbolInfo;
-                    // FuncInfo actualOuterScope = funcInfo;
-                    // backend.emitMV(T0, FP, format("Get static link of %s", actualOuterScope.getFuncName()));
-
-                    // while (actualOuterScope != null)
-                    // {
-                    //     if (actualOuterScope.getLocals().stream().anyMatch(lc -> lc.getVarName().equals(stackVarInfo.getVarName())))
-                    //     {
-                    //         // t0 should now have the fp of the static-scope's AR
-                    //         StackVarInfo svi = (StackVarInfo) actualOuterScope.getSymbolTable().get(stackVarInfo.getVarName());
-                    //         int varIdx = actualOuterScope.getVarIndex(stackVarInfo.getVarName());
-                    //         int offset = (-(varIdx - actualOuterScope.getParams().size()) * backend.getWordSize()) - 4;
-
-                    //         backend.emitSW(A0, T0, offset,
-                    //                 format("[fn=%s] load NON-LOCAL param `%s: %s` to reg %s",
-                    //                         actualOuterScope.getFuncName(),
-                    //                         svi.getVarName(),
-                    //                         svi.getVarType(),
-                    //                         "A0"));
-                    //         break;
-                    //     }
-                    //     else
-                    //     {
-                    //         String parentFuncInfoName = actualOuterScope.getParentFuncInfo() == null ? "NULL" : actualOuterScope.getParentFuncInfo().getFuncName();
-                    //         if (actualOuterScope.getParentFuncInfo() != null) {
-                    //             AsmHelper.loadLocalVarToReg(backend, actualOuterScope, -1, T0, T0,
-                    //                     format("Load static link from %s to %s",
-                    //                             actualOuterScope.getFuncName(),
-                    //                             parentFuncInfoName));
-                    //         }
-                    //         actualOuterScope = actualOuterScope.getParentFuncInfo();
-                    //     }
-                    // }
                 }
             }
 
@@ -1819,6 +1793,7 @@ public class CodeGenImpl extends CodeGenBase {
         emitStrEql();
         emitStrNEql();
         emitPrintInt();
+        emitPrintStr();
     }
 
     private static final int listHeaderWords = 4; // last word is __len__
@@ -2238,8 +2213,21 @@ public class CodeGenImpl extends CodeGenBase {
         backend.emitJR(RA, "[JUMP]: Exit StrCat");
     }
 
+    protected void emitPrintStr() {
+        //Put string into A1 prior
+        bke.emitGlobalLabel(printStr);
+        bke.emitADDI(A1, A0, 16, "get __str__ offset");
+        bke.emitLI(A0, 4, "print str ecall code");
+        bke.emitEcall("print string");
+        bke.emitLI(A1, 10, "load newline char");
+        bke.emitLI(A0, 11, "print char ecall code");
+        bke.emitEcall("print char");
+        bke.emitMV(A0, ZERO, "load None");
+        bke.emitJR(RA, "return back to caller");
+    }
+
     protected void emitPrintInt() {
-        //Put integer into A1
+        //Put integer into A1 prior
         bke.emitGlobalLabel(printInt);
         bke.emitLI(A0, 1, "print int ecall code");
         bke.emitEcall("print integer");
